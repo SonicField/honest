@@ -52,29 +52,26 @@ Honest includes a C reference implementation: `libhonest` (a library) and a set 
 
 ```bash
 make            # build libhonest and CLI tools
-make test       # run the test suite
-make install    # install to /usr/local (or PREFIX=...)
+make check      # run the test suite
 ```
 
 ### C Library
 
 ```c
-#include <honest.h>
+#include "honest.h"
 
 /* Parse a document */
-HonestResult result = honest_parse(input, length);
-if (result.diagnostics_count > 0) {
+hon_diag_list diags = {0};
+hon_document *doc = hon_parse(src, len, &diags);
+if (diags.count > 0) {
     /* handle warnings/errors */
 }
 
-/* Access typed values */
-HonestValue *msg = honest_get_var(result.document, "message");
-
 /* Serialise back */
-char *output = honest_serialise(result.document, HONEST_MODE_DOCUMENT);
+char *output = hon_serialise(doc, HON_MODE_DOCUMENT, NULL);
 
 /* Clean up */
-honest_free(result.document);
+hon_doc_free(doc);
 ```
 
 ### Command-Line Tools
@@ -83,11 +80,15 @@ honest_free(result.document);
 # Parse and validate a document
 honest-parse message.honest
 
-# Pretty-print a document
-honest-inspect message.honest
+# Parse with verbose inspection
+honest-parse -v message.honest
 
-# Emit a document from structured input
-honest-emit --type Message --data '...'
+# Reformat a document (pretty-print or wire mode)
+honest-fmt message.honest
+honest-fmt -w message.honest
+
+# Extract a value by name and field path
+honest-get message.honest msg payload.content
 ```
 
 ## Project Structure
@@ -110,7 +111,8 @@ honest/
     04-sequences.honest         # Ordered collections
     05-nbs-agent-message.honest # Full NBS agent message
   src/                          # C reference implementation
-  tests/                        # Conformance test suite
+  tools/                        # CLI tools (honest-parse, honest-fmt, honest-get)
+  tests/                        # Test suite
 ```
 
 ## Design Principles
@@ -123,7 +125,7 @@ honest/
 
 ## Status
 
-The format specification is complete. The C reference implementation is in progress.
+The format specification and C reference implementation are complete.
 
 | Component | Status |
 |-----------|--------|
@@ -132,10 +134,10 @@ The format specification is complete. The C reference implementation is in progr
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | In progress |
-| CLI tools | In progress |
-| Conformance test suite | In progress |
+| C library (libhonest) | Complete |
+| CLI tools | Complete |
+| Test suite (224 tests) | Complete |
 
 ## License
 
-Honest is a component of the NBS (No Bull Shit) framework. Open source.
+Honest is a component of the NBS (No Bull Shit) framework. Released under the [MIT License](LICENSE).

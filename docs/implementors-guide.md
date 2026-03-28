@@ -415,7 +415,7 @@ For every grammar rule, test rejection of invalid input:
 
 ### 9.4 Conformance Test Suite
 
-The Honest project provides a conformance test suite (see `tests/conformance/`). Each test is a self-contained document with annotations describing the expected parse result. Run the full suite against your implementation before claiming conformance.
+The Honest project provides a test suite (see `tests/`). Run the full suite against your implementation before claiming conformance.
 
 ---
 
