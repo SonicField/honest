@@ -135,13 +135,6 @@ static hon_type *resolve_type_ref(parser *p, hon_str name, uint32_t line, uint32
     return t;
 }
 
-/* Resolve through alias chains to find the underlying type */
-static hon_type *resolve_alias(hon_type *t) {
-    while (t && t->kind == HON_TYPE_ALIAS)
-        t = t->u.alias.target;
-    return t;
-}
-
 /* ---- Parse Enumeration ---- */
 
 static hon_type *parse_enum(parser *p, hon_str name) {
@@ -510,7 +503,7 @@ static hon_value *parse_value(parser *p, hon_type *type) {
     }
     p->depth++;
 
-    hon_type *resolved = resolve_alias(type);
+    hon_type *resolved = hon_resolve_alias(type);
     hon_value *val = hon_arena_alloc(p->arena, sizeof(hon_value), _Alignof(hon_value));
     val->type = type;
 

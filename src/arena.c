@@ -108,3 +108,9 @@ const char *hon_primitive_name(hon_primitive p) {
     if (p < HON_PRIM_COUNT) return names[p];
     return "unknown";
 }
+
+hon_type *hon_resolve_alias(hon_type *t) {
+    while (t && t->kind == HON_TYPE_ALIAS)
+        t = t->u.alias.target;
+    return t;
+}

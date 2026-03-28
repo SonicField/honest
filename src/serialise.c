@@ -14,12 +14,6 @@
 
 /* ---- Forward Declarations ---- */
 
-static hon_type *resolve_alias(hon_type *t) {
-    while (t && t->kind == HON_TYPE_ALIAS)
-        t = t->u.alias.target;
-    return t;
-}
-
 /* ---- Output Buffer ---- */
 
 typedef struct {
@@ -275,7 +269,7 @@ static void serialise_value(outbuf *b, const hon_value *v) {
             if (v->u.record.field_count > 0) buf_char(b, ';');
             buf_nl(b);
             /* We need the tag field name from the type */
-            hon_type *resolved = resolve_alias(v->type);
+            hon_type *resolved = hon_resolve_alias(v->type);
             if (resolved && resolved->kind == HON_TYPE_RECORD &&
                 resolved->u.record.has_variant) {
                 buf_append(b, resolved->u.record.tag_name.data,

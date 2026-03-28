@@ -295,6 +295,7 @@ void          hon_doc_free(hon_document *doc);
 bool          hon_str_eq(hon_str a, hon_str b);
 hon_str       hon_str_dup(hon_arena *a, hon_str s);
 const char   *hon_primitive_name(hon_primitive p);
+hon_type     *hon_resolve_alias(hon_type *t);
 
 #ifdef __cplusplus
 }
