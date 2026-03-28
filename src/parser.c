@@ -30,6 +30,8 @@ typedef struct {
     /* Nesting depth tracking */
     uint32_t       depth;
     uint32_t       max_depth;
+    /* Optional rulebook for divergence detection */
+    const hon_registry *registry;
 } parser;
 
 #define MAX_DEPTH_DEFAULT 64
@@ -414,7 +416,43 @@ static hon_type *parse_type_definition(parser *p) {
 
     expect_skip(p, HON_TOK_SEMICOLON);
 
-    if (t) register_type(p, t);
+    if (t) {
+        /* Check for divergence against loaded rulebook */
+        if (p->registry) {
+            hon_type *rb_type = hon_registry_lookup(p->registry, t->name);
+            if (rb_type) {
+                /* Type exists in rulebook — check for divergence */
+                bool divergent = false;
+                if (rb_type->kind != t->kind) {
+                    divergent = true;
+                } else if (rb_type->kind == HON_TYPE_ENUM) {
+                    if (rb_type->u.enumeration.value_count != t->u.enumeration.value_count) {
+                        divergent = true;
+                    } else {
+                        for (uint32_t i = 0; i < rb_type->u.enumeration.value_count; i++) {
+                            if (!hon_str_eq(rb_type->u.enumeration.values[i],
+                                            t->u.enumeration.values[i])) {
+                                divergent = true;
+                                break;
+                            }
+                        }
+                    }
+                } else if (rb_type->kind == HON_TYPE_RECORD) {
+                    if (rb_type->u.record.field_count != t->u.record.field_count) {
+                        divergent = true;
+                    }
+                }
+
+                if (divergent) {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_INFO,
+                                  name_tok.line, name_tok.col,
+                                  "type '%.*s' diverges from rulebook",
+                                  (int)t->name.len, t->name.data);
+                }
+            }
+        }
+        register_type(p, t);
+    }
     return t;
 }
 
@@ -952,6 +990,48 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
         .var_count = 0,
         .depth     = 0,
         .max_depth = MAX_DEPTH_DEFAULT,
+    };
+
+    if (diags) hon_diag_init(diags, arena);
+
+    p.types = hon_arena_alloc(arena, sizeof(hon_type *) * p.type_cap,
+                              _Alignof(hon_type *));
+    p.vars  = hon_arena_alloc(arena, sizeof(hon_variable) * p.var_cap,
+                              _Alignof(hon_variable));
+
+    hon_document *doc = parse_document(&p);
+    if (!doc) {
+        hon_arena_free(arena);
+        return NULL;
+    }
+
+    return doc;
+}
+
+hon_document *hon_parse_with_registry(const char *src, size_t len,
+                                       const hon_registry *reg,
+                                       hon_diag_list *diags) {
+    init_primitives();
+
+    hon_arena *arena = hon_arena_new(0);
+    if (!arena) return NULL;
+
+    char *arena_src = hon_arena_alloc(arena, len + 1, 1);
+    if (!arena_src) { hon_arena_free(arena); return NULL; }
+    memcpy(arena_src, src, len);
+    arena_src[len] = '\0';
+
+    parser p = {
+        .lex       = hon_lexer_new(arena, arena_src, len),
+        .arena     = arena,
+        .diags     = diags,
+        .type_cap  = 64,
+        .type_count = 0,
+        .var_cap   = 16,
+        .var_count = 0,
+        .depth     = 0,
+        .max_depth = MAX_DEPTH_DEFAULT,
+        .registry  = reg,
     };
 
     if (diags) hon_diag_init(diags, arena);

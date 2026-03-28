@@ -249,9 +249,16 @@ void hon_diag_push(hon_diag_list *dl, hon_arena *a,
                    hon_diag_level level, uint32_t line, uint32_t col,
                    const char *fmt, ...);
 
+/* ---- Forward Declarations ---- */
+
+typedef struct hon_registry hon_registry;
+
 /* ---- Parser ---- */
 
 hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags);
+hon_document *hon_parse_with_registry(const char *src, size_t len,
+                                       const hon_registry *reg,
+                                       hon_diag_list *diags);
 hon_document *hon_parse_file(const char *path, hon_diag_list *diags);
 
 /* ---- Serialiser ---- */
@@ -265,8 +272,6 @@ char *hon_serialise(const hon_document *doc, hon_serial_mode mode, size_t *out_l
 int   hon_serialise_to(const hon_document *doc, hon_serial_mode mode, FILE *out);
 
 /* ---- Type Registry (Rulebook) ---- */
-
-typedef struct hon_registry hon_registry;
 
 hon_registry *hon_registry_new(hon_arena *a);
 int           hon_registry_load(hon_registry *reg, const char *path, hon_diag_list *diags);

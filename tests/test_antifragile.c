@@ -4,12 +4,6 @@
  * Core invariant: unknown declarations extend the receiver's knowledge,
  * never cause errors. Divergent declarations are logged, not rejected.
  * The document's declarations are ground truth.
- *
- * LIFETIME NOTE: hon_registry_extend stores pointers into the document's
- * arena. The document MUST NOT be freed while the registry still references
- * its types. In these tests, we free documents only after all registry
- * assertions are complete, or we don't free them at all (the arena owns
- * everything and is freed at test end).
  */
 
 #include "honest.h"
@@ -37,12 +31,19 @@ static bool has_errors(const hon_diag_list *diags) {
     return false;
 }
 
+static bool has_info(const hon_diag_list *diags) {
+    if (!diags) return false;
+    for (uint32_t i = 0; i < diags->count; i++) {
+        if (diags->items[i].level == HON_DIAG_INFO) return true;
+    }
+    return false;
+}
+
 /*
  * Helper: parse a rulebook string into a registry.
- * Returns the parsed document via out_doc so caller controls its lifetime.
+ * Registry deep-copies types, so the source document can be freed.
  */
-static hon_registry *load_rulebook_str(hon_arena *arena, const char *src,
-                                        hon_document **out_doc) {
+static hon_registry *load_rulebook_str(hon_arena *arena, const char *src) {
     hon_diag_list diags = {0};
     hon_document *doc = hon_parse(src, strlen(src), &diags);
     hon_registry *reg = hon_registry_new(arena);
@@ -50,9 +51,8 @@ static hon_registry *load_rulebook_str(hon_arena *arena, const char *src,
         for (uint32_t i = 0; i < doc->type_count; i++) {
             hon_registry_extend(reg, doc->types[i]);
         }
+        hon_doc_free(doc); /* safe — registry deep-copied */
     }
-    /* Caller must keep doc alive while registry references its types */
-    if (out_doc) *out_doc = doc;
     return reg;
 }
 
@@ -69,15 +69,13 @@ static void test_unknown_enum(void) {
         "var _dummy : Confidence = Certain;\n";
 
     hon_arena *arena = hon_arena_new(0);
-    hon_document *rb_doc = NULL;
-    hon_registry *reg = load_rulebook_str(arena, rulebook_src, &rb_doc);
+    hon_registry *reg = load_rulebook_str(arena, rulebook_src);
     ASSERT(reg != NULL, "T1: rulebook loaded");
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Confidence")) != NULL,
            "T1: Confidence in rulebook");
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Priority")) == NULL,
            "T1: Priority NOT in rulebook");
 
-    /* Parse document with unknown Priority type */
     const char *doc_src =
         "type\n"
         "  Priority = (Critical, High, Normal, Low);\n"
@@ -85,7 +83,8 @@ static void test_unknown_enum(void) {
         "var p : Priority = Normal;\n";
 
     hon_diag_list diags = {0};
-    hon_document *doc = hon_parse(doc_src, strlen(doc_src), &diags);
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
 
     ASSERT(doc != NULL, "T1: parse succeeds");
     ASSERT(!has_errors(&diags), "T1: zero errors");
@@ -96,22 +95,20 @@ static void test_unknown_enum(void) {
     ASSERT(hon_str_eq(doc->vars[0].value->u.enum_val, HON_STR_LIT("Normal")),
            "T1: value is Normal");
 
-    /* Extend registry with parsed types */
+    /* Unknown type — no divergence diagnostic expected */
+    ASSERT(!has_info(&diags), "T1: no divergence info (type is new, not divergent)");
+
+    /* Extend registry */
     hon_registry_extend(reg, doc->types[0]);
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Priority")) != NULL,
            "T1: Priority now in registry");
 
-    /* Free docs only after all registry assertions */
     hon_doc_free(doc);
-    hon_doc_free(rb_doc);
     hon_arena_free(arena);
 }
 
 /*
  * Test 2: Unknown record type
- * - Rulebook has Confidence only
- * - Document declares Point (unknown record)
- * - Parser must succeed with correct field values
  */
 static void test_unknown_record(void) {
     const char *rulebook_src =
@@ -120,8 +117,7 @@ static void test_unknown_record(void) {
         "var _dummy : Confidence = Certain;\n";
 
     hon_arena *arena = hon_arena_new(0);
-    hon_document *rb_doc = NULL;
-    hon_registry *reg = load_rulebook_str(arena, rulebook_src, &rb_doc);
+    hon_registry *reg = load_rulebook_str(arena, rulebook_src);
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Point")) == NULL,
            "T2: Point NOT in rulebook");
 
@@ -135,7 +131,8 @@ static void test_unknown_record(void) {
         "var p : Point = (x : 1; y : 2);\n";
 
     hon_diag_list diags = {0};
-    hon_document *doc = hon_parse(doc_src, strlen(doc_src), &diags);
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
 
     ASSERT(doc != NULL, "T2: parse succeeds");
     ASSERT(!has_errors(&diags), "T2: zero errors");
@@ -152,7 +149,6 @@ static void test_unknown_record(void) {
            "T2: Point now in registry");
 
     hon_doc_free(doc);
-    hon_doc_free(rb_doc);
     hon_arena_free(arena);
 }
 
@@ -161,7 +157,7 @@ static void test_unknown_record(void) {
  * - Rulebook has Status = (Active, Inactive)
  * - Document declares Status = (Active, Inactive, Pending, Archived)
  * - Parser must succeed, document's definition governs
- * - Divergence SHOULD be logged as a warning (spec §1.1, §6.3)
+ * - Divergence MUST be logged as info diagnostic (spec §1.1, §6.3)
  */
 static void test_divergent_type(void) {
     const char *rulebook_src =
@@ -170,14 +166,12 @@ static void test_divergent_type(void) {
         "var _dummy : Status = Active;\n";
 
     hon_arena *arena = hon_arena_new(0);
-    hon_document *rb_doc = NULL;
-    hon_registry *reg = load_rulebook_str(arena, rulebook_src, &rb_doc);
+    hon_registry *reg = load_rulebook_str(arena, rulebook_src);
 
     hon_type *old_status = hon_registry_lookup(reg, HON_STR_LIT("Status"));
     ASSERT(old_status != NULL, "T3: Status in rulebook");
     ASSERT(old_status->u.enumeration.value_count == 2, "T3: rulebook has 2 values");
 
-    /* Parse document with divergent Status */
     const char *doc_src =
         "type\n"
         "  Status = (Active, Inactive, Pending, Archived);\n"
@@ -185,18 +179,14 @@ static void test_divergent_type(void) {
         "var s : Status = Pending;\n";
 
     hon_diag_list diags = {0};
-    hon_document *doc = hon_parse(doc_src, strlen(doc_src), &diags);
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
 
     ASSERT(doc != NULL, "T3: parse succeeds");
     ASSERT(!has_errors(&diags), "T3: zero errors");
 
-    /* NOTE: Spec §6.3 says divergence between document declarations and
-     * a loaded rulebook should be logged as information, not an error.
-     * Full divergence detection requires a registry-aware parse API
-     * (hon_parse does not accept a registry). This is a known gap —
-     * the parser correctly accepts the divergent document (tested below),
-     * but does not yet emit a divergence diagnostic.
-     * TODO: Add hon_parse_with_registry and test divergence logging. */
+    /* Divergence must be logged as info (spec §1.1, §6.3) */
+    ASSERT(has_info(&diags), "T3: divergence logged as info diagnostic");
 
     /* Document's definition governs — Pending is valid */
     ASSERT(doc->types[0]->u.enumeration.value_count == 4,
@@ -212,14 +202,11 @@ static void test_divergent_type(void) {
            "T3: registry updated to 4 values");
 
     hon_doc_free(doc);
-    hon_doc_free(rb_doc);
     hon_arena_free(arena);
 }
 
 /*
  * Test 4: Matching type (rulebook acceleration)
- * - Rulebook and document both have identical Confidence
- * - Parser succeeds, types are structurally identical
  */
 static void test_matching_type(void) {
     const char *rulebook_src =
@@ -228,8 +215,7 @@ static void test_matching_type(void) {
         "var _dummy : Confidence = Certain;\n";
 
     hon_arena *arena = hon_arena_new(0);
-    hon_document *rb_doc = NULL;
-    hon_registry *reg = load_rulebook_str(arena, rulebook_src, &rb_doc);
+    hon_registry *reg = load_rulebook_str(arena, rulebook_src);
 
     const char *doc_src =
         "type\n"
@@ -238,10 +224,13 @@ static void test_matching_type(void) {
         "var c : Confidence = High;\n";
 
     hon_diag_list diags = {0};
-    hon_document *doc = hon_parse(doc_src, strlen(doc_src), &diags);
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
 
     ASSERT(doc != NULL, "T4: parse succeeds");
     ASSERT(!has_errors(&diags), "T4: zero errors");
+    /* Matching type — no divergence diagnostic */
+    ASSERT(!has_info(&diags), "T4: no divergence info (types match)");
 
     /* Structurally identical */
     hon_type *rb_type = hon_registry_lookup(reg, HON_STR_LIT("Confidence"));
@@ -259,15 +248,11 @@ static void test_matching_type(void) {
            "T4: value is High");
 
     hon_doc_free(doc);
-    hon_doc_free(rb_doc);
     hon_arena_free(arena);
 }
 
 /*
  * Test 5: Mixed — known, unknown, and divergent in same document
- * - Rulebook has Confidence (matching) and Status (will diverge)
- * - Document has Confidence (matching), Status (divergent), Priority (unknown)
- * - All three must parse correctly
  */
 static void test_mixed(void) {
     const char *rulebook_src =
@@ -277,8 +262,7 @@ static void test_mixed(void) {
         "var _dummy : Confidence = Certain;\n";
 
     hon_arena *arena = hon_arena_new(0);
-    hon_document *rb_doc = NULL;
-    hon_registry *reg = load_rulebook_str(arena, rulebook_src, &rb_doc);
+    hon_registry *reg = load_rulebook_str(arena, rulebook_src);
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Confidence")) != NULL,
            "T5: Confidence in rulebook");
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Status")) != NULL,
@@ -297,12 +281,16 @@ static void test_mixed(void) {
         "var p : Priority = Normal;\n";
 
     hon_diag_list diags = {0};
-    hon_document *doc = hon_parse(doc_src, strlen(doc_src), &diags);
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
 
     ASSERT(doc != NULL, "T5: parse succeeds");
     ASSERT(!has_errors(&diags), "T5: zero errors");
     ASSERT(doc->type_count == 3, "T5: 3 types parsed");
     ASSERT(doc->var_count == 3, "T5: 3 variables parsed");
+
+    /* Divergence diagnostic for Status */
+    ASSERT(has_info(&diags), "T5: divergence info emitted for Status");
 
     /* All values correct */
     ASSERT(hon_str_eq(doc->vars[0].value->u.enum_val, HON_STR_LIT("High")),
@@ -312,12 +300,11 @@ static void test_mixed(void) {
     ASSERT(hon_str_eq(doc->vars[2].value->u.enum_val, HON_STR_LIT("Normal")),
            "T5: Priority = Normal (unknown type)");
 
-    /* Extend registry with all parsed types */
+    /* Extend registry */
     for (uint32_t i = 0; i < doc->type_count; i++) {
         hon_registry_extend(reg, doc->types[i]);
     }
 
-    /* All three now in registry — assert BEFORE freeing doc */
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Confidence")) != NULL,
            "T5: Confidence still in registry");
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Status")) != NULL,
@@ -325,13 +312,37 @@ static void test_mixed(void) {
     ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Priority")) != NULL,
            "T5: Priority added to registry");
 
-    /* Status updated to divergent definition */
     hon_type *status = hon_registry_lookup(reg, HON_STR_LIT("Status"));
     ASSERT(status->u.enumeration.value_count == 4,
            "T5: Status has 4 values (document governs)");
 
     hon_doc_free(doc);
-    hon_doc_free(rb_doc);
+    hon_arena_free(arena);
+}
+
+/*
+ * Test 6: Registry hash is SHA-256 and stable
+ */
+static void test_registry_hash(void) {
+    const char *src =
+        "type\n"
+        "  Color = (Red, Green, Blue);\n"
+        "  Size = (Small, Medium, Large);\n"
+        "var _dummy : Color = Red;\n";
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = load_rulebook_str(arena, src);
+
+    char *hash1 = hon_registry_hash(reg);
+    ASSERT(hash1 != NULL, "T6: hash returned");
+    ASSERT(strlen(hash1) == 64, "T6: hash is 64 hex chars (SHA-256)");
+
+    /* Same content produces same hash */
+    char *hash2 = hon_registry_hash(reg);
+    ASSERT(strcmp(hash1, hash2) == 0, "T6: hash is deterministic");
+
+    free(hash1);
+    free(hash2);
     hon_arena_free(arena);
 }
 
@@ -341,6 +352,7 @@ int main(void) {
     test_divergent_type();
     test_matching_type();
     test_mixed();
+    test_registry_hash();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
