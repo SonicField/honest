@@ -1,0 +1,67 @@
+{ NBS Standard Type Library }
+{ Rulebook for the NBS multi-agent framework }
+{ Version: content-hash (computed from canonical form) }
+
+type
+  { Epistemic metadata — every claim carries its confidence and origin }
+  Confidence = (Certain, High, Moderate, Low, Speculative);
+  Provenance = (Observed, Inferred, Recalled, Generated);
+
+  { Agent roles in the NBS framework }
+  AgentRole = (Supervisor, Gatekeeper, Scribe, Theologian,
+               Generalist, Testkeeper, Pythia, Shepherd);
+
+  { Speech act classification }
+  ClaimKind = (Assertion, Query, Correction, Partial, Error);
+
+  { Semantic string subtypes }
+  Uri         = String;
+  Identifier  = String;
+  NaturalText = String;
+  FilePath    = String;
+
+  { Temporal }
+  Timestamp = LongInt;
+
+  { Boolean optionality patterns }
+  OptionalString = record
+    case present : Boolean of
+      True  : (value : String);
+      False : ();
+  end;
+
+  OptionalInteger = record
+    case present : Boolean of
+      True  : (value : Integer);
+      False : ();
+  end;
+
+  { Source code references }
+  SourceRef = record
+    file : FilePath;
+    line : Integer;
+  end;
+
+  { The core claim type — a speech act with epistemic metadata }
+  Claim = record
+    confidence : Confidence;
+    provenance : Provenance;
+    as_of      : Timestamp;
+    case kind : ClaimKind of
+      Assertion  : (content : NaturalText);
+      Query      : (intent : NaturalText; scope : NaturalText);
+      Correction : (replaces : LongInt; content : NaturalText);
+      Partial    : (content : NaturalText; completeness : Real);
+      Error      : (code : Word; reason : NaturalText);
+  end;
+
+  { Agent-to-agent message }
+  Message = record
+    id      : LongInt;
+    sender  : AgentRole;
+    payload : Claim;
+  end;
+
+  { Collections }
+  MessageBatch = sequence of Message;
+  Claims       = sequence of Claim;

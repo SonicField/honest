@@ -1,0 +1,41 @@
+{ Example 4: Sequences }
+{ Demonstrates variable-length ordered collections }
+{ including sequences of records and nested sequences. }
+
+type
+  { A simple sequence of primitives }
+  Scores = sequence of Integer;
+
+  { A record to put in a sequence }
+  Coordinate = record
+    x : Real;
+    y : Real;
+  end;
+
+  { A sequence of records }
+  Path = sequence of Coordinate;
+
+  { Nested sequences require named intermediate types }
+  Row    = sequence of Integer;
+  Matrix = sequence of Row;
+
+{ A list of test scores }
+var scores : Scores = (95; 87; 62; 100; 73);
+
+{ A path through 2D space }
+var route : Path = (
+  (x : 0.0;  y : 0.0);
+  (x : 1.5;  y : 2.3);
+  (x : 4.0;  y : 1.1);
+  (x : 6.5;  y : 5.0);
+);
+
+{ A 3x3 identity matrix }
+var identity : Matrix = (
+  (1; 0; 0);
+  (0; 1; 0);
+  (0; 0; 1);
+);
+
+{ An empty sequence is valid }
+var nothing : Scores = ();

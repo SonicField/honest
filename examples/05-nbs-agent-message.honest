@@ -1,0 +1,78 @@
+{ Example 5: NBS Agent Message }
+{ A complete real-world example: an NBS agent submitting }
+{ an architectural analysis report with multiple findings. }
+{ This uses all major Honest features together: }
+{ enumerations, type aliases, records, variant records, }
+{ and sequences of variant records. }
+
+type
+  { Epistemic metadata }
+  Confidence = (Certain, High, Moderate, Low, Speculative);
+  Provenance = (Observed, Inferred, Recalled, Generated);
+
+  { Agent identity }
+  AgentRole = (Supervisor, Gatekeeper, Scribe, Theologian,
+               Generalist, Testkeeper);
+
+  { Semantic string subtypes }
+  NaturalText = String;
+  Timestamp   = LongInt;
+  FilePath    = String;
+
+  { Source code location }
+  SourceRef = record
+    file : FilePath;
+    line : Integer;
+  end;
+
+  { Analysis finding categories }
+  FindingKind = (Risk, Invariant, Assumption, Recommendation);
+
+  Finding = record
+    kind       : FindingKind;
+    confidence : Confidence;
+    provenance : Provenance;
+    summary    : NaturalText;
+    location   : SourceRef;
+  end;
+
+  Findings = sequence of Finding;
+
+  { The analysis report }
+  Report = record
+    analyst   : AgentRole;
+    timestamp : Timestamp;
+    subject   : NaturalText;
+    findings  : Findings;
+  end;
+
+var report : Report = (
+  analyst   : Theologian;
+  timestamp : 1774856400;
+  subject   : 'Architecture review of authentication module';
+  findings  : (
+    (kind       : Risk;
+     confidence : High;
+     provenance : Observed;
+     summary    : 'Session tokens are not rotated after privilege escalation';
+     location   : (file : 'src/auth/session.c'; line : 142));
+
+    (kind       : Invariant;
+     confidence : Certain;
+     provenance : Observed;
+     summary    : 'All password hashes use bcrypt with cost factor 12';
+     location   : (file : 'src/auth/password.c'; line : 58));
+
+    (kind       : Assumption;
+     confidence : Moderate;
+     provenance : Inferred;
+     summary    : 'Rate limiting assumes single-process deployment';
+     location   : (file : 'src/auth/ratelimit.c'; line : 23));
+
+    (kind       : Recommendation;
+     confidence : High;
+     provenance : Inferred;
+     summary    : 'Add CSRF token validation to all state-changing endpoints';
+     location   : (file : 'src/auth/middleware.c'; line : 1));
+  );
+);

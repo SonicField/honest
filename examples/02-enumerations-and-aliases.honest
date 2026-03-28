@@ -1,0 +1,29 @@
+{ Example 2: Enumerations and Type Aliases }
+{ Demonstrates enumerated types for fixed value sets }
+{ and type aliases for semantic string subtypes. }
+
+type
+  { Named values — self-documenting, no magic numbers }
+  Priority = (Critical, High, Normal, Low);
+  Status   = (Open, InProgress, Resolved, Closed);
+
+  { Type aliases give meaning to primitive types }
+  TaskId      = LongInt;
+  NaturalText = String;
+  Timestamp   = LongInt;
+
+  Task = record
+    id          : TaskId;
+    title       : NaturalText;
+    priority    : Priority;
+    status      : Status;
+    created_at  : Timestamp;
+  end;
+
+var task : Task = (
+  id          : 1042;
+  title       : 'Implement Honest parser';
+  priority    : High;
+  status      : InProgress;
+  created_at  : 1774856400;
+);

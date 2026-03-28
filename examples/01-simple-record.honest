@@ -1,0 +1,17 @@
+{ Example 1: Simple Record }
+{ A minimal Honest document demonstrating basic types and records. }
+{ Read this first if you are new to the format. }
+
+type
+  { A 2D point with a label }
+  Point = record
+    x     : Real;
+    y     : Real;
+    label : String;
+  end;
+
+var origin : Point = (
+  x     : 0.0;
+  y     : 0.0;
+  label : 'Origin';
+);

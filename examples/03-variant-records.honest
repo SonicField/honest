@@ -1,0 +1,41 @@
+{ Example 3: Variant Records (Discriminated Unions) }
+{ Demonstrates how different data shapes are expressed }
+{ using a single type with a discriminant tag. }
+{ Also shows the Boolean variant pattern for optionality. }
+
+type
+  ShapeKind = (Circle, Rectangle, Triangle);
+
+  { Optional fields use the Boolean variant pattern }
+  OptionalString = record
+    case present : Boolean of
+      True  : (value : String);
+      False : ();
+  end;
+
+  { A shape whose fields depend on what kind it is }
+  Shape = record
+    name  : String;
+    color : OptionalString;
+    case kind : ShapeKind of
+      Circle    : (radius : Real);
+      Rectangle : (width : Real; height : Real);
+      Triangle  : (base : Real; height : Real);
+  end;
+
+{ A circle with a colour }
+var shape1 : Shape = (
+  name  : 'Big red circle';
+  color : (present : True; value : 'red');
+  kind  : Circle;
+  radius : 5.0;
+);
+
+{ A rectangle with no colour specified }
+var shape2 : Shape = (
+  name  : 'Anonymous box';
+  color : (present : False);
+  kind  : Rectangle;
+  width  : 3.0;
+  height : 2.0;
+);
