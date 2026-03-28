@@ -306,7 +306,32 @@ For content-hash computation (rulebook versioning), produce canonical form:
 
 A rulebook is a file containing only a `type` section (no `var` section). Parse it using the same declaration parser. The result is a pre-populated type registry.
 
-### 7.2 Matching
+### 7.2 Registry Ownership Model
+
+The registry must own its types independently of any document's lifetime. When a type is added to the registry (from a parsed document or rulebook), the registry must **deep-copy** the type into its own memory.
+
+This is critical: a parsed document's types live in the document's arena. If the document is freed, any pointers into its arena become dangling. The registry cannot hold borrowed pointers — it must own copies.
+
+The deep copy must handle all type kinds recursively:
+- Enumeration values (copy the string array)
+- Record fields and variant arms (copy field lists, tag type, arm field lists)
+- Sequence element types (copy the referenced type)
+- Alias targets (copy the target type)
+- Primitives are static singletons and need not be copied
+
+After extending the registry, the caller is free to discard the source document.
+
+### 7.3 Registry-Aware Parsing
+
+To detect rulebook divergence during parsing, provide the registry to the parser. The parser compares each incoming type declaration against the registry:
+
+- **Match:** The document's declaration is structurally identical to the registry entry. Use the registry entry (fast path).
+- **Divergence:** The document's declaration differs from the registry entry. Parse from the document. Emit an Info-level diagnostic logging the divergence. The document's declaration governs.
+- **Unknown:** The document declares a type not in the registry. Parse the declaration normally. Optionally extend the registry.
+
+Both halves of the antifragility invariant must hold: unknown/divergent declarations never produce errors, and divergence is logged as information.
+
+### 7.4 Matching
 
 When parsing a document with a loaded rulebook:
 
@@ -323,7 +348,7 @@ for each type declaration in document:
 
 "Structurally identical" means the type definitions produce the same canonical form. Compare canonical text, not AST structures — this avoids subtle comparison bugs.
 
-### 7.3 Content-Hash Versioning
+### 7.5 Content-Hash Versioning
 
 To compute a rulebook's version hash:
 
@@ -331,19 +356,27 @@ To compute a rulebook's version hash:
 2. Compute SHA-256 of the canonical text as UTF-8 bytes.
 3. The hash is the version identifier.
 
+Use a standard SHA-256 implementation. Do not substitute a non-cryptographic hash — the hash is a contract that downstream consumers store, compare, and pin against. A weak hash that is later replaced invalidates every stored reference.
+
 ---
 
 ## 8. Common Pitfalls
 
-### 8.1 Forgetting Type-Directed Parsing
+### 8.1 Registry Lifetime and Ownership
+
+The most dangerous bug in a registry implementation: storing borrowed pointers to types from a parsed document. When the document is freed, the registry holds dangling pointers. This is a use-after-free that may not manifest in tests (if you happen to dereference before freeing) but will crash in real-world usage.
+
+Always deep-copy types into the registry's own arena. The registry must be self-contained — its correctness must not depend on any other allocation's lifetime.
+
+### 8.2 Forgetting Type-Directed Parsing
 
 The most common implementor mistake is trying to parse data values without type context. This leads to ambiguity bugs. Always thread the expected type through your value parser.
 
-### 8.2 Alias Chains
+### 8.3 Alias Chains
 
 A type alias can reference another alias: `A = B`, `B = C`, `C = Integer`. Your alias resolution must handle chains. Set a reasonable limit (e.g., 64 steps) to detect accidental cycles (which should be caught by the no-forward-reference rule, but defense in depth is wise).
 
-### 8.3 Variant Record Field Ordering
+### 8.4 Variant Record Field Ordering
 
 When parsing a variant record value, the fields appear in this order:
 1. Fixed fields (in declaration order)
@@ -352,7 +385,7 @@ When parsing a variant record value, the fields appear in this order:
 
 The discriminant is syntactically just another field — it appears at the position where the variant part is declared in the type. Since the variant part must be last, the discriminant appears after all fixed fields.
 
-### 8.4 Trailing Semicolons
+### 8.5 Trailing Semicolons
 
 The grammar permits an optional trailing semicolon in field lists and sequence values. Your parser must accept both forms:
 
@@ -362,7 +395,7 @@ var a : Point = (x : 1; y : 2);
 var b : Point = (x : 1; y : 2;);
 ```
 
-### 8.5 Empty Constructs
+### 8.6 Empty Constructs
 
 Handle all empty cases:
 
@@ -373,11 +406,11 @@ Handle all empty cases:
 | Empty case arm | `False : ()` | Valid, the arm has no fields |
 | Empty string | `''` | Valid |
 
-### 8.6 Enumeration Value Scoping
+### 8.7 Enumeration Value Scoping
 
 Enumeration values are resolved by the expected type. The identifier `Red` could belong to any enumeration that has a `Red` value. Your parser must look up the expected type's enumeration to resolve the value — do not maintain a global enumeration value namespace.
 
-### 8.7 Unicode and String Handling
+### 8.8 Unicode and String Handling
 
 - All strings are UTF-8.
 - String length in the spec is defined in bytes, not characters.
