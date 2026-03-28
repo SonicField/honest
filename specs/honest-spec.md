@@ -37,7 +37,7 @@ This specification uses the following conventions:
 
 ### 2.1 Character Set
 
-An Honest document is a sequence of Unicode characters encoded in UTF-8. Implementations MUST accept UTF-8 input. Implementations MUST produce UTF-8 output.
+An Honest document is a sequence of Unicode characters encoded in UTF-8. Implementations MUST accept UTF-8 input. Implementations MUST produce UTF-8 output. A byte order mark (BOM, U+FEFF) MUST NOT be present at the start of an Honest document.
 
 ### 2.2 Whitespace
 
