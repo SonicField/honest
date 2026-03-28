@@ -1,0 +1,227 @@
+(* ============================================================ *)
+(*  Honest Interchange Format — Formal Grammar                  *)
+(*  EBNF (ISO/IEC 14977)                                       *)
+(*                                                              *)
+(*  Aligned with specs/honest-spec.md v1.0 Draft                *)
+(*                                                              *)
+(*  This is a standalone EBNF file for parser implementors.     *)
+(*  The normative specification is honest-spec.md §8.           *)
+(*  This file duplicates the grammar with additional            *)
+(*  implementor annotations.                                    *)
+(* ============================================================ *)
+
+
+(* ---- Document Structure ---- *)
+
+(* A document has exactly two sections: declarations then data.
+   A rulebook omits the data section. *)
+
+Document            = DeclarationsSection , DataSection ;
+Rulebook            = DeclarationsSection ;
+
+DeclarationsSection = "type" , TypeDeclaration , { TypeDeclaration } ;
+DataSection         = VariableAssignment , { VariableAssignment } ;
+
+
+(* ---- Type Declarations ---- *)
+
+(* Types must be in topological order — no forward references.
+   No recursive types (direct or indirect). *)
+
+TypeDeclaration     = Identifier , "=" , TypeDefinition , ";" ;
+
+TypeDefinition      = EnumerationType
+                    | RecordType
+                    | SequenceType
+                    | TypeReference ;    (* type alias *)
+
+
+(* ---- Enumeration Types ---- *)
+
+(* Comma-separated identifiers in parentheses.
+   At least one value required. Ordinal position is significant. *)
+
+EnumerationType     = "(" , Identifier , { "," , Identifier } , ")" ;
+
+
+(* ---- Record Types ---- *)
+
+(* Ordered collection of named, typed fields.
+   All declared fields must be present in data.
+   Optional trailing semicolon after last field.
+   At most one variant part, must be last. *)
+
+RecordType          = "record" , [ FieldList ] , [ VariantPart ] , "end" ;
+FieldList           = Field , { ";" , Field } , [ ";" ] ;
+Field               = Identifier , ":" , TypeReference ;
+
+
+(* ---- Variant Records (Discriminated Unions) ---- *)
+
+(* Discriminant must be an enumeration type or Boolean.
+   The variant part has no 'end' — terminated by the
+   enclosing record's 'end'.
+   Each arm is parenthesised; empty arms use (). *)
+
+VariantPart         = "case" , Identifier , ":" , TypeReference , "of"
+                    , VariantArm , { VariantArm } ;
+VariantArm          = Identifier , ":" , "(" , [ FieldList ] , ")" , ";" ;
+
+
+(* ---- Sequence Types ---- *)
+
+(* Variable-length, homogeneously typed, ordered.
+   Element type must be a TypeReference (identifier),
+   not an inline type definition — prevents anonymous
+   nested sequences. *)
+
+SequenceType        = "sequence" , "of" , TypeReference ;
+
+
+(* ---- Type References ---- *)
+
+(* Resolves to a primitive type or a previously declared type. *)
+
+TypeReference       = Identifier ;
+
+
+(* ---- Variable Assignments (Data Section) ---- *)
+
+VariableAssignment  = "var" , Identifier , ":" , TypeReference , "=" , Value , ";" ;
+
+
+(* ---- Values ---- *)
+
+(* Parser disambiguates RecordValue vs SequenceValue and
+   CharLiteral vs StringLiteral using the declared type
+   of the enclosing context. *)
+
+Value               = PrimitiveValue
+                    | EnumValue
+                    | RecordValue
+                    | SequenceValue ;
+
+PrimitiveValue      = IntegerLiteral
+                    | RealLiteral
+                    | StringLiteral
+                    | BooleanLiteral
+                    | CharLiteral ;
+
+BooleanLiteral      = "True" | "False" ;
+
+EnumValue           = Identifier ;
+
+(* Record values: semicolon-separated field assignments.
+   Fields must appear in declaration order.
+   Optional trailing semicolon. *)
+
+RecordValue         = "(" , FieldValue , { ";" , FieldValue } , [ ";" ] , ")" ;
+FieldValue          = Identifier , ":" , Value ;
+
+(* Sequence values: semicolon-separated elements.
+   Empty sequence is (). Optional trailing semicolon. *)
+
+SequenceValue       = "(" , [ Value , { ";" , Value } , [ ";" ] ] , ")" ;
+
+
+(* ---- Lexical Elements ---- *)
+
+Identifier          = Letter , { Letter | Digit | "_" } ;
+Letter              = "A".."Z" | "a".."z" ;
+Digit               = "0".."9" ;
+HexDigit            = Digit | "A".."F" | "a".."f" ;
+
+IntegerLiteral      = [ "-" ] , Digit , { Digit } ;
+
+RealLiteral         = [ "-" ] , Digit , { Digit } , "." , Digit , { Digit }
+                    , [ Exponent ] ;
+Exponent            = ( "e" | "E" ) , [ "+" | "-" ] , Digit , { Digit } ;
+
+StringLiteral       = "'" , { StringChar } , "'" ;
+CharLiteral         = "'" , StringChar , "'" ;
+
+StringChar          = (* any Unicode char except "'" and
+                        raw control chars U+0000..U+001F
+                        except U+0009 *)
+                    | "''"
+                    | EscapeSequence ;
+
+EscapeSequence      = "\n" | "\r" | "\t" | "\\"
+                    | "\u" , HexDigit , HexDigit , HexDigit , HexDigit
+                    | "\U" , HexDigit , HexDigit , HexDigit , HexDigit ,
+                             HexDigit , HexDigit , HexDigit , HexDigit ;
+
+
+(* ---- Comments ---- *)
+
+(* Comments may appear between any tokens.
+   They do not nest. Stripped in wire mode.
+   Treated as whitespace by the parser. *)
+
+Comment             = BraceComment | ParenStarComment ;
+BraceComment        = "{" , { (* any char except "}" *) } , "}" ;
+ParenStarComment    = "(*" , { (* any char except "*)" *) } , "*)" ;
+
+
+(* ---- Built-in Primitive Types ---- *)
+
+(* These are predefined and need not appear in declarations.
+   Identifiers are case-sensitive.
+
+   Numeric:
+     Byte        — unsigned 8-bit   (0..255)
+     Word        — unsigned 16-bit  (0..65535)
+     Integer     — signed 32-bit    (-2147483648..2147483647)
+     LongInt     — signed 64-bit    (-2^63..2^63-1)
+     Real        — IEEE 754 double
+
+   Text:
+     Char        — single Unicode code point
+     String      — variable-length UTF-8 text (min 65535 bytes supported)
+
+   Boolean:
+     Boolean     — True or False
+
+   Type widths are semantic contracts, not platform-dependent. *)
+
+
+(* ---- Reserved Keywords ---- *)
+
+(* Case-sensitive. Only the exact forms below are reserved:
+
+     type  record  end  case  of  sequence  var  Boolean  True  False
+
+   Built-in type names (Byte, Word, Integer, LongInt, Real,
+   Char, String) are NOT reserved — they may be shadowed by
+   user type definitions, though this is strongly discouraged.
+   Implementations SHOULD warn on case-only-different identifiers. *)
+
+
+(* ---- Conformance Notes ---- *)
+
+(* 1. TOPOLOGICAL ORDERING: Every TypeReference must resolve to
+      a built-in or a type declared earlier in the same
+      DeclarationsSection. Forward references are parse errors.
+
+   2. NO RECURSIVE TYPES: The type dependency graph must be a DAG.
+
+   3. FIELD COMPLETENESS: Every declared field must have a
+      corresponding FieldValue. For variant records, the
+      discriminant field and exactly the matching arm's fields
+      must be present.
+
+   4. FIELD ORDER: FieldValues must match declaration order.
+
+   5. DECLARATIONS MANDATORY: A Document without a
+      DeclarationsSection is invalid. Rulebooks (declarations
+      only, no data) are the sole exception.
+
+   6. SINGLE ENCODING: One textual format. No binary mode.
+
+   7. CHARACTER ENCODING: UTF-8. No BOM.
+
+   8. NESTING DEPTH: Conformant parsers MUST support depth >= 32.
+      SHOULD support depth >= 64.
+
+   9. ROUND-TRIP: parse(serialise(doc)) must yield a semantically
+      identical document. *)
