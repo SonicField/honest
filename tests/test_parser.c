@@ -436,6 +436,124 @@ static void test_real_literal(void) {
     hon_doc_free(doc);
 }
 
+/* ---- Validation tests (negative cases) ---- */
+
+static void test_invalid_enum_value(void) {
+    const char *src =
+        "type\n"
+        "  Color = (Red, Green, Blue);\n"
+        "\n"
+        "var c : Color = Yellow;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse completes (with errors)");
+    ASSERT(has_errors(&diags), "invalid enum value detected");
+
+    hon_doc_free(doc);
+}
+
+static void test_byte_out_of_range(void) {
+    const char *src =
+        "type\n"
+        "  B = Byte;\n"
+        "\n"
+        "var b : B = 256;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse completes (with errors)");
+    ASSERT(has_errors(&diags), "byte out of range detected");
+
+    hon_doc_free(doc);
+}
+
+static void test_word_out_of_range(void) {
+    const char *src =
+        "type\n"
+        "  W = Word;\n"
+        "\n"
+        "var w : W = 70000;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse completes (with errors)");
+    ASSERT(has_errors(&diags), "word out of range detected");
+
+    hon_doc_free(doc);
+}
+
+static void test_negative_byte(void) {
+    const char *src =
+        "type\n"
+        "  B = Byte;\n"
+        "\n"
+        "var b : B = -1;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse completes (with errors)");
+    ASSERT(has_errors(&diags), "negative byte detected");
+
+    hon_doc_free(doc);
+}
+
+static void test_duplicate_enum_value(void) {
+    const char *src =
+        "type\n"
+        "  Color = (Red, Green, Red);\n"
+        "\n"
+        "var c : Color = Red;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse completes (with errors)");
+    ASSERT(has_errors(&diags), "duplicate enum value detected");
+
+    hon_doc_free(doc);
+}
+
+static void test_duplicate_field_name(void) {
+    const char *src =
+        "type\n"
+        "  Bad = record\n"
+        "    x : Integer;\n"
+        "    x : Integer;\n"
+        "  end;\n"
+        "\n"
+        "var b : Bad = (x : 1; x : 2);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse completes (with errors)");
+    ASSERT(has_errors(&diags), "duplicate field name detected");
+
+    hon_doc_free(doc);
+}
+
+static void test_valid_byte_range(void) {
+    const char *src =
+        "type\n"
+        "  B = Byte;\n"
+        "\n"
+        "var b : B = 255;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+
+    ASSERT(doc != NULL, "parse valid byte");
+    ASSERT(!has_errors(&diags), "255 is valid Byte");
+    ASSERT(doc->vars[0].value->u.integer == 255, "value is 255");
+
+    hon_doc_free(doc);
+}
+
 int main(void) {
     test_simple_enum();
     test_simple_record();
@@ -450,6 +568,15 @@ int main(void) {
     test_multiple_vars();
     test_boolean_variant();
     test_real_literal();
+
+    /* Validation tests */
+    test_invalid_enum_value();
+    test_byte_out_of_range();
+    test_word_out_of_range();
+    test_negative_byte();
+    test_duplicate_enum_value();
+    test_duplicate_field_name();
+    test_valid_byte_range();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

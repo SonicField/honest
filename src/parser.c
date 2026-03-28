@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <inttypes.h>
 
 /* ---- Parser State ---- */
 
@@ -152,6 +153,16 @@ static hon_type *parse_enum(parser *p, hon_str name) {
         hon_token val = expect_skip(p, HON_TOK_IDENT);
         if (val.kind == HON_TOK_ERROR) return NULL;
 
+        /* Check for duplicate enum value */
+        for (uint32_t i = 0; i < count; i++) {
+            if (hon_str_eq(values[i], val.text)) {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              val.line, val.col,
+                              "duplicate enumeration value '%.*s'",
+                              (int)val.text.len, val.text.data);
+            }
+        }
+
         if (count < 256) {
             values[count++] = val.text;
         }
@@ -220,6 +231,16 @@ static uint32_t parse_fields(parser *p, hon_field *fields, uint32_t max_fields,
 
         hon_type *ftype = resolve_type_ref(p, type_tok.text,
                                             type_tok.line, type_tok.col);
+
+        /* Check for duplicate field name */
+        for (uint32_t i = 0; i < count; i++) {
+            if (hon_str_eq(fields[i].name, name_tok.text)) {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              name_tok.line, name_tok.col,
+                              "duplicate field name '%.*s'",
+                              (int)name_tok.text.len, name_tok.text.data);
+            }
+        }
 
         if (count < max_fields) {
             fields[count].name = name_tok.text;
@@ -536,6 +557,30 @@ static hon_value *parse_value(parser *p, hon_type *type) {
                 memcpy(buf, t.text.data, len);
                 buf[len] = '\0';
                 val->u.integer = strtoll(buf, NULL, 10);
+                /* Range validation */
+                int64_t v = val->u.integer;
+                switch (resolved->u.prim) {
+                case HON_PRIM_BYTE:
+                    if (v < 0 || v > 255)
+                        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                      t.line, t.col,
+                                      "value %" PRId64 " out of range for Byte (0..255)", v);
+                    break;
+                case HON_PRIM_WORD:
+                    if (v < 0 || v > 65535)
+                        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                      t.line, t.col,
+                                      "value %" PRId64 " out of range for Word (0..65535)", v);
+                    break;
+                case HON_PRIM_INTEGER:
+                    if (v < -2147483648LL || v > 2147483647LL)
+                        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                      t.line, t.col,
+                                      "value %" PRId64 " out of range for Integer", v);
+                    break;
+                default:
+                    break;
+                }
             }
             break;
 
@@ -597,6 +642,21 @@ static hon_value *parse_value(parser *p, hon_type *type) {
             hon_token t = next_skip_comments(p);
             val->kind = HON_VAL_ENUM;
             val->u.enum_val = t.text;
+            /* Validate enum value is a member of the type */
+            bool valid_enum = false;
+            for (uint32_t i = 0; i < resolved->u.enumeration.value_count; i++) {
+                if (hon_str_eq(resolved->u.enumeration.values[i], t.text)) {
+                    valid_enum = true;
+                    break;
+                }
+            }
+            if (!valid_enum) {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              t.line, t.col,
+                              "'%.*s' is not a value of enumeration '%.*s'",
+                              (int)t.text.len, t.text.data,
+                              (int)resolved->name.len, resolved->name.data);
+            }
         } else {
             hon_token t = next_skip_comments(p);
             hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
