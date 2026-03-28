@@ -321,7 +321,7 @@ static void test_mixed(void) {
 }
 
 /*
- * Test 6: Registry hash is SHA-256 and stable
+ * Test 6: Registry hash is SHA-256 over canonical definitions
  */
 static void test_registry_hash(void) {
     const char *src =
@@ -341,9 +341,25 @@ static void test_registry_hash(void) {
     char *hash2 = hon_registry_hash(reg);
     ASSERT(strcmp(hash1, hash2) == 0, "T6: hash is deterministic");
 
+    /* Different definitions with same name produce different hash */
+    const char *src2 =
+        "type\n"
+        "  Color = (Red, Green, Blue, Yellow);\n"
+        "  Size = (Small, Medium, Large);\n"
+        "var _dummy : Color = Red;\n";
+
+    hon_arena *arena2 = hon_arena_new(0);
+    hon_registry *reg2 = load_rulebook_str(arena2, src2);
+    char *hash3 = hon_registry_hash(reg2);
+    ASSERT(hash3 != NULL, "T6: divergent hash returned");
+    ASSERT(strcmp(hash1, hash3) != 0,
+           "T6: different definitions produce different hashes");
+
     free(hash1);
     free(hash2);
+    free(hash3);
     hon_arena_free(arena);
+    hon_arena_free(arena2);
 }
 
 int main(void) {

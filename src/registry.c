@@ -319,46 +319,140 @@ static void sha256_final(sha256_ctx *c, uint8_t out[32]) {
 #undef s0
 #undef s1
 
-/* ---- Registry Hash (SHA-256) ---- */
+/* ---- Canonical Type Serialisation (for hashing) ---- */
+
+/* Append to a dynamically growing buffer */
+typedef struct { char *data; size_t len; size_t cap; } hashbuf;
+
+static void hb_init(hashbuf *b) { b->cap = 256; b->data = malloc(b->cap); b->len = 0; }
+static void hb_free(hashbuf *b) { free(b->data); }
+
+static void hb_append(hashbuf *b, const char *s, size_t n) {
+    while (b->len + n >= b->cap) { b->cap *= 2; b->data = realloc(b->data, b->cap); }
+    memcpy(b->data + b->len, s, n);
+    b->len += n;
+}
+
+static void hb_str(hashbuf *b, const char *s) { hb_append(b, s, strlen(s)); }
+
+static void serialise_type_canonical(hashbuf *b, const hon_type *t) {
+    hb_append(b, t->name.data, t->name.len);
+    hb_str(b, " = ");
+
+    switch (t->kind) {
+    case HON_TYPE_ENUM:
+        hb_str(b, "(");
+        for (uint32_t i = 0; i < t->u.enumeration.value_count; i++) {
+            if (i > 0) hb_str(b, ", ");
+            hb_append(b, t->u.enumeration.values[i].data,
+                       t->u.enumeration.values[i].len);
+        }
+        hb_str(b, ")");
+        break;
+
+    case HON_TYPE_RECORD:
+        hb_str(b, "record ");
+        for (uint32_t i = 0; i < t->u.record.field_count; i++) {
+            if (i > 0) hb_str(b, "; ");
+            hb_append(b, t->u.record.fields[i].name.data,
+                       t->u.record.fields[i].name.len);
+            hb_str(b, " : ");
+            hb_append(b, t->u.record.fields[i].type->name.data,
+                       t->u.record.fields[i].type->name.len);
+        }
+        if (t->u.record.has_variant) {
+            if (t->u.record.field_count > 0) hb_str(b, "; ");
+            hb_str(b, "case ");
+            hb_append(b, t->u.record.tag_name.data, t->u.record.tag_name.len);
+            hb_str(b, " : ");
+            hb_append(b, t->u.record.tag_type->name.data,
+                       t->u.record.tag_type->name.len);
+            hb_str(b, " of ");
+            for (uint32_t i = 0; i < t->u.record.arm_count; i++) {
+                if (i > 0) hb_str(b, " ");
+                hb_append(b, t->u.record.arms[i].label.data,
+                           t->u.record.arms[i].label.len);
+                hb_str(b, " : (");
+                for (uint32_t j = 0; j < t->u.record.arms[i].field_count; j++) {
+                    if (j > 0) hb_str(b, "; ");
+                    hb_append(b, t->u.record.arms[i].fields[j].name.data,
+                               t->u.record.arms[i].fields[j].name.len);
+                    hb_str(b, " : ");
+                    hb_append(b, t->u.record.arms[i].fields[j].type->name.data,
+                               t->u.record.arms[i].fields[j].type->name.len);
+                }
+                hb_str(b, ");");
+            }
+        }
+        hb_str(b, " end");
+        break;
+
+    case HON_TYPE_SEQUENCE:
+        hb_str(b, "sequence of ");
+        hb_append(b, t->u.sequence.element_type->name.data,
+                   t->u.sequence.element_type->name.len);
+        break;
+
+    case HON_TYPE_ALIAS:
+        hb_append(b, t->u.alias.target->name.data,
+                   t->u.alias.target->name.len);
+        break;
+
+    case HON_TYPE_PRIMITIVE:
+        hb_append(b, t->name.data, t->name.len);
+        break;
+    }
+}
+
+/* ---- Registry Hash (SHA-256 of canonical type definitions) ---- */
+
+typedef struct { hon_str name; const hon_type *type; } hash_entry;
+
+static int cmp_hash_entries(const void *a, const void *b) {
+    const hash_entry *ea = a, *eb = b;
+    size_t min_len = ea->name.len < eb->name.len ? ea->name.len : eb->name.len;
+    int c = memcmp(ea->name.data, eb->name.data, min_len);
+    if (c != 0) return c;
+    return (ea->name.len > eb->name.len) - (ea->name.len < eb->name.len);
+}
 
 char *hon_registry_hash(const hon_registry *reg) {
-    if (!reg) return NULL;
+    if (!reg || reg->count == 0) return NULL;
 
-    /* Collect type names */
-    hon_str *names = malloc(sizeof(hon_str) * reg->count);
-    if (!names) return NULL;
+    /* Collect entries */
+    hash_entry *entries = malloc(sizeof(hash_entry) * reg->count);
+    if (!entries) return NULL;
     uint32_t n = 0;
     for (uint32_t i = 0; i < reg->cap; i++) {
         if (reg->entries[i].occupied) {
-            names[n++] = reg->entries[i].name;
+            entries[n].name = reg->entries[i].name;
+            entries[n].type = reg->entries[i].type;
+            n++;
         }
     }
 
-    /* Sort alphabetically (insertion sort, small N) */
-    for (uint32_t i = 1; i < n; i++) {
-        hon_str key = names[i];
-        int j = (int)i - 1;
-        while (j >= 0) {
-            size_t cmp_len = names[j].len < key.len ? names[j].len : key.len;
-            int cmp = memcmp(names[j].data, key.data, cmp_len);
-            if (cmp < 0 || (cmp == 0 && names[j].len <= key.len)) break;
-            names[j + 1] = names[j];
-            j--;
-        }
-        names[j + 1] = key;
-    }
+    /* Sort alphabetically by name */
+    qsort(entries, n, sizeof(hash_entry), cmp_hash_entries);
 
-    /* SHA-256 over sorted type names, each followed by a null separator */
+    /* Serialise each type in canonical form and hash */
     sha256_ctx ctx;
     sha256_init(&ctx);
+
+    hashbuf buf;
+    hb_init(&buf);
+
     for (uint32_t i = 0; i < n; i++) {
-        sha256_update(&ctx, names[i].data, names[i].len);
-        sha256_update(&ctx, "\0", 1);
+        buf.len = 0; /* reset buffer for each type */
+        serialise_type_canonical(&buf, entries[i].type);
+        sha256_update(&ctx, buf.data, buf.len);
+        sha256_update(&ctx, "\n", 1); /* separator */
     }
+
+    hb_free(&buf);
+    free(entries);
 
     uint8_t digest[32];
     sha256_final(&ctx, digest);
-    free(names);
 
     /* Hex-encode */
     char *result = malloc(65);
