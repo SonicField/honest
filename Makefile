@@ -27,7 +27,7 @@ CFLAGS  += -fsanitize=$(SANITIZE) -fno-omit-frame-pointer -g
 LDFLAGS += -fsanitize=$(SANITIZE)
 endif
 
-.PHONY: all lib tools tests check check-asan check-leak clean
+.PHONY: all lib tools tests check check-asan check-leak audit clean
 
 all: lib tools
 
@@ -55,6 +55,13 @@ $(BUILDDIR)/test_%: $(TESTDIR)/%.c $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
+
+audit: check
+	$(MAKE) check-asan
+	python3 -m pytest python/tests/ -v
+	bash scripts/cross-impl-conformance.sh
+	bash scripts/cross-impl-conformance-level3.sh
+	@echo "Full audit passed."
 
 check-asan:
 	$(MAKE) clean

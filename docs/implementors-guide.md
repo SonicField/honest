@@ -374,7 +374,7 @@ The most common implementor mistake is trying to parse data values without type 
 
 ### 8.3 Alias Chains
 
-A type alias can reference another alias: `A = B`, `B = C`, `C = Integer`. Your alias resolution must handle chains. Set a reasonable limit (e.g., 64 steps) to detect accidental cycles (which should be caught by the no-forward-reference rule, but defense in depth is wise).
+A type alias can reference another alias: `A = B`, `B = C`, `C = Integer`. Your alias resolution must handle chains. Set a reasonable limit (e.g., 256 steps) to detect accidental cycles (which should be caught by the no-forward-reference rule, but defense in depth is wise).
 
 ### 8.4 Variant Record Field Ordering
 
@@ -491,8 +491,13 @@ The format was designed to be easy to implement correctly. If your parser is bec
 
 Two reference implementations are provided:
 
-- **C** (`src/`, `include/honest.h`) — arena-allocated, single-pass, ~2500 lines. Includes typed field accessors (`hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char`) and 627 tests with AddressSanitizer coverage.
+- **C** (`src/`, `include/honest.h`) — arena-allocated, single-pass, ~2500 lines. Includes typed field accessors (`hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char`) and 637 tests across 7 suites with AddressSanitizer coverage.
 
-- **Python** (`python/honest/`) — pure Python, ~600 lines. Demonstrates Pythonic API design with auto-unwrapping (leaf values return native types) and attribute-style access. Includes `extract()` for finding Honest documents in mixed text. 32 pytest tests.
+- **Python** (`python/honest/`) — pure Python, ~600 lines. Demonstrates Pythonic API design with auto-unwrapping (leaf values return native types) and attribute-style access. Includes `extract()` for finding Honest documents in mixed text. 34 pytest tests.
 
-Both implementations accept the same inputs and produce the same outputs. Use the C test suite's inputs as the conformance baseline for any new implementation.
+Both implementations accept the same inputs and produce byte-identical wire output. Cross-implementation conformance is verified at three levels by the scripts in `scripts/`:
+
+- `cross-impl-conformance.sh` — Level 1 (mutual parseability) and Level 2 (byte-identical wire output)
+- `cross-impl-conformance-level3.sh` — Level 3 (identical document model after re-parse)
+
+Use the C test suite's inputs as the conformance baseline for any new implementation.
