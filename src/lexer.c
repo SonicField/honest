@@ -150,6 +150,11 @@ static hon_token lex_string(hon_lexer *lex) {
             if (!at_end(lex)) advance(lex); /* skip escaped char */
             continue;
         }
+        /* Reject control characters inside strings (except tab) */
+        if ((unsigned char)c < 0x20 && c != '\t') {
+            size_t len = (size_t)(lex->src + lex->pos - start);
+            return make_token(HON_TOK_ERROR, start, len, start_line, start_col);
+        }
         advance(lex);
     }
 

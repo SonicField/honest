@@ -35,11 +35,20 @@ void hon_diag_free(hon_diag_list *dl) {
 void hon_diag_push(hon_diag_list *dl, hon_arena *a,
                    hon_diag_level level, uint32_t line, uint32_t col,
                    const char *fmt, ...) {
+    if (!dl || !dl->items) return;
     if (dl->count >= dl->cap) {
         uint32_t new_cap = dl->cap * 2;
         hon_diagnostic *new_items = hon_arena_alloc(
             a, sizeof(hon_diagnostic) * new_cap, _Alignof(hon_diagnostic));
-        if (!new_items) return;
+        if (!new_items) {
+            /* Arena exhausted — cannot grow. Mark the last diagnostic
+             * as a truncation sentinel so callers can detect the drop. */
+            if (dl->count > 0) {
+                dl->items[dl->count - 1].message =
+                    "(further diagnostics truncated — arena exhausted)";
+            }
+            return;
+        }
         memcpy(new_items, dl->items, sizeof(hon_diagnostic) * dl->count);
         dl->items = new_items;
         dl->cap   = new_cap;

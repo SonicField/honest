@@ -31,6 +31,8 @@ typedef struct {
     size_t      len;
 } hon_str;
 
+/* WARNING: only use with string literals, not char* variables.
+ * sizeof(char*) - 1 produces the wrong length for pointers. */
 #define HON_STR_LIT(s) ((hon_str){(s), sizeof(s) - 1})
 
 /* ---- Token Types ---- */

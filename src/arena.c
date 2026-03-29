@@ -8,6 +8,7 @@
 #include "honest.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #define ARENA_DEFAULT_CAP (64 * 1024)
 
@@ -48,7 +49,10 @@ void *hon_arena_alloc(hon_arena *a, size_t size, size_t align) {
 
     hon_arena_block *b = a->current;
     size_t padding = (align - (b->used % align)) % align;
-    size_t needed  = padding + size;
+
+    /* Guard against integer overflow in padding + size */
+    if (size > SIZE_MAX - padding) return NULL;
+    size_t needed = padding + size;
 
     if (b->used + needed > b->cap) {
         size_t new_cap = b->cap * 2;
@@ -76,6 +80,17 @@ void hon_arena_free(hon_arena *a) {
         b = next;
     }
     free(a);
+}
+
+/* ---- Internal OOM abort (used by parser/serialiser internals) ---- */
+
+void *hon_arena_alloc_or_die(hon_arena *a, size_t size, size_t align) {
+    void *ptr = hon_arena_alloc(a, size, align);
+    if (!ptr && size > 0) {
+        fprintf(stderr, "libhonest: fatal: arena allocation of %zu bytes failed\n", size);
+        abort();
+    }
+    return ptr;
 }
 
 /* ---- String utilities ---- */
