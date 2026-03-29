@@ -16,8 +16,6 @@ honest-parse [options] <file | ->
 
 ```pascal
 type
-  ParseOption = (Quiet, Verbose, Help);
-
   ParseCli = record
     file    : String;     { path to .honest file, or '-' for stdin }
     quiet   : Boolean;    { -q, --quiet: suppress diagnostics }
@@ -113,10 +111,12 @@ honest-get <file | -> <var-name> <field> [field ...]
 
 ```pascal
 type
+  FieldPaths = sequence of String;
+
   GetCli = record
-    file     : String;               { path to .honest file, or '-' for stdin }
-    var_name : String;               { variable name to read from }
-    fields   : sequence of String;   { dot-path field names to extract }
+    file     : String;       { path to .honest file, or '-' for stdin }
+    var_name : String;       { variable name to read from }
+    fields   : FieldPaths;   { dot-path field names to extract }
   end;
 ```
 
