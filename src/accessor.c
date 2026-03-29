@@ -122,3 +122,72 @@ int hon_get_long(const hon_document *doc,
 
     return -2; /* not an integer type */
 }
+
+int hon_get_bool(const hon_document *doc,
+                 const char *var_name,
+                 const char *field_name,
+                 bool *out) {
+    if (!doc || !var_name || !field_name || !out)
+        return -1;
+
+    const hon_variable *var = find_var(doc, var_name);
+    if (!var) return -1;
+
+    const hon_value *val = navigate(var->value, field_name);
+    if (!val) return -1;
+
+    if (val->kind == HON_VAL_BOOL) {
+        *out = val->u.boolean;
+        return 0;
+    }
+
+    return -2; /* not a boolean type */
+}
+
+int hon_get_real(const hon_document *doc,
+                 const char *var_name,
+                 const char *field_name,
+                 double *out) {
+    if (!doc || !var_name || !field_name || !out)
+        return -1;
+
+    const hon_variable *var = find_var(doc, var_name);
+    if (!var) return -1;
+
+    const hon_value *val = navigate(var->value, field_name);
+    if (!val) return -1;
+
+    if (val->kind == HON_VAL_REAL) {
+        *out = val->u.real;
+        return 0;
+    }
+
+    /* Accept integers as reals for convenience */
+    if (val->kind == HON_VAL_INT) {
+        *out = (double)val->u.integer;
+        return 0;
+    }
+
+    return -2; /* not a real type */
+}
+
+int hon_get_char(const hon_document *doc,
+                 const char *var_name,
+                 const char *field_name,
+                 uint32_t *out) {
+    if (!doc || !var_name || !field_name || !out)
+        return -1;
+
+    const hon_variable *var = find_var(doc, var_name);
+    if (!var) return -1;
+
+    const hon_value *val = navigate(var->value, field_name);
+    if (!val) return -1;
+
+    if (val->kind == HON_VAL_CHAR) {
+        *out = val->u.character;
+        return 0;
+    }
+
+    return -2; /* not a char type */
+}

@@ -309,6 +309,21 @@ int  hon_get_long(const hon_document *doc,
                   const char *field_name,
                   long *out);
 
+int  hon_get_bool(const hon_document *doc,
+                  const char *var_name,
+                  const char *field_name,
+                  bool *out);
+
+int  hon_get_real(const hon_document *doc,
+                  const char *var_name,
+                  const char *field_name,
+                  double *out);
+
+int  hon_get_char(const hon_document *doc,
+                  const char *var_name,
+                  const char *field_name,
+                  uint32_t *out);
+
 /* ---- Utility ---- */
 
 bool          hon_str_eq(hon_str a, hon_str b);

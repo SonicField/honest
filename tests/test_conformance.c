@@ -1295,6 +1295,73 @@ static void test_accessor_api(void) {
     hon_doc_free(doc);
 }
 
+/* ================================================================
+ * Field Accessor API — hon_get_bool / hon_get_real / hon_get_char
+ * ================================================================ */
+static void test_accessor_bool_real_char(void) {
+    const char *src =
+        "type\n"
+        "  Config = record\n"
+        "    active : Boolean;\n"
+        "    ratio  : Real;\n"
+        "    grade  : Char;\n"
+        "    count  : Integer;\n"
+        "    name   : String;\n"
+        "  end;\n"
+        "var cfg : Config = (\n"
+        "  active : True;\n"
+        "  ratio  : 3.14;\n"
+        "  grade  : 'A';\n"
+        "  count  : 7;\n"
+        "  name   : 'test';\n"
+        ");\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "bool/real/char: parse succeeds");
+
+    /* hon_get_bool */
+    bool bval;
+    int rc = hon_get_bool(doc, "cfg", "active", &bval);
+    ASSERT(rc == 0, "get_bool: succeeds");
+    ASSERT(bval == true, "get_bool: value is true");
+
+    /* hon_get_bool — type mismatch */
+    rc = hon_get_bool(doc, "cfg", "name", &bval);
+    ASSERT(rc == -2, "get_bool: string field returns -2");
+
+    /* hon_get_bool — missing field */
+    rc = hon_get_bool(doc, "cfg", "nonexistent", &bval);
+    ASSERT(rc == -1, "get_bool: missing field returns -1");
+
+    /* hon_get_real */
+    double dval;
+    rc = hon_get_real(doc, "cfg", "ratio", &dval);
+    ASSERT(rc == 0, "get_real: succeeds");
+    ASSERT(dval > 3.13 && dval < 3.15, "get_real: value is ~3.14");
+
+    /* hon_get_real — integer accepted as real */
+    rc = hon_get_real(doc, "cfg", "count", &dval);
+    ASSERT(rc == 0, "get_real: integer promoted to real");
+    ASSERT(dval == 7.0, "get_real: promoted value correct");
+
+    /* hon_get_real — type mismatch */
+    rc = hon_get_real(doc, "cfg", "name", &dval);
+    ASSERT(rc == -2, "get_real: string field returns -2");
+
+    /* hon_get_char */
+    uint32_t cval;
+    rc = hon_get_char(doc, "cfg", "grade", &cval);
+    ASSERT(rc == 0, "get_char: succeeds");
+    ASSERT(cval == 'A', "get_char: value is 'A'");
+
+    /* hon_get_char — type mismatch */
+    rc = hon_get_char(doc, "cfg", "name", &cval);
+    ASSERT(rc == -2, "get_char: string field returns -2");
+
+    hon_doc_free(doc);
+}
+
 int main(void) {
     /* §2 — Lexical */
     test_bom_rejection();
@@ -1356,6 +1423,7 @@ int main(void) {
 
     /* Field Accessor API */
     test_accessor_api();
+    test_accessor_bool_real_char();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
