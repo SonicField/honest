@@ -48,14 +48,8 @@ static void test_bom_rejection(void) {
     hon_diag_list diags = {0};
     hon_document *doc = hon_parse(src, sizeof(src) - 1, &diags);
 
-    /* Parser should either reject or produce a diagnostic */
-    if (doc && !has_errors(&diags)) {
-        /* If it parsed successfully, verify it at least handled the BOM
-         * gracefully (parsed correct values) */
-        ASSERT(doc->var_count >= 1, "§2.1: BOM handled gracefully if accepted");
-    } else {
-        ASSERT(has_errors(&diags), "§2.1: BOM produces error diagnostic");
-    }
+    /* BOM MUST NOT be present — parser must reject or produce an error */
+    ASSERT(!doc || has_errors(&diags), "§2.1: BOM rejected with error diagnostic");
 
     if (doc) hon_doc_free(doc);
 }
