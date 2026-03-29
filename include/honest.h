@@ -295,6 +295,18 @@ int           hon_doc_add_var(hon_document *doc, hon_str name,
 
 void          hon_doc_free(hon_document *doc);
 
+/* ---- Field Accessors ---- */
+
+int  hon_get_string(const hon_document *doc,
+                    const char *var_name,
+                    const char *field_name,
+                    char *buf, size_t bufsz);
+
+int  hon_get_long(const hon_document *doc,
+                  const char *var_name,
+                  const char *field_name,
+                  long *out);
+
 /* ---- Utility ---- */
 
 bool          hon_str_eq(hon_str a, hon_str b);

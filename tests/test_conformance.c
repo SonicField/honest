@@ -1108,6 +1108,186 @@ static void test_mixed_var_types(void) {
     hon_doc_free(doc);
 }
 
+/* ================================================================
+ * Non-NUL-terminated buffer parsing (R6 verification)
+ *
+ * hon_parse accepts (buf, len). If the buffer is not NUL-terminated,
+ * the lexer must respect len and never read past the boundary.
+ * This is critical for socket/wire use where buffers are sized by
+ * a length prefix, not a terminator.
+ * ================================================================ */
+static void test_non_nul_terminated_buffer(void) {
+    /* Build a valid document string */
+    const char *valid = "type\n  N = Integer;\nvar x : N = 42;\n";
+    size_t valid_len = strlen(valid);
+
+    /* Allocate a buffer with NO NUL terminator and garbage after */
+    char *buf = malloc(valid_len + 16);
+    memcpy(buf, valid, valid_len);
+    /* Fill bytes after valid content with non-NUL garbage */
+    memset(buf + valid_len, 0xFF, 16);
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(buf, valid_len, &diags);
+
+    ASSERT(doc != NULL, "non-NUL buffer: parses successfully");
+    ASSERT(!has_errors(&diags), "non-NUL buffer: no errors");
+    ASSERT(doc->var_count == 1, "non-NUL buffer: one variable");
+    ASSERT(doc->vars[0].value->kind == HON_VAL_INT, "non-NUL buffer: integer value");
+    ASSERT(doc->vars[0].value->u.integer == 42, "non-NUL buffer: correct value");
+
+    hon_doc_free(doc);
+    free(buf);
+}
+
+/* Buffer with valid document followed by truncated garbage —
+ * the parser must stop at len, not read into the garbage. */
+static void test_buffer_boundary_with_trailing_syntax(void) {
+    /* Valid document immediately followed by what looks like more syntax */
+    const char full[] = "type\n  N = Integer;\nvar x : N = 7;\nvar y : N = 99;\n";
+    /* Parse only up to the first var declaration */
+    const char *first_var_end = "type\n  N = Integer;\nvar x : N = 7;\n";
+    size_t partial_len = strlen(first_var_end);
+
+    /* Ensure the buffer contains more data beyond partial_len */
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(full, partial_len, &diags);
+
+    ASSERT(doc != NULL, "buffer boundary: parses partial buffer");
+    ASSERT(!has_errors(&diags), "buffer boundary: no errors");
+    ASSERT(doc->var_count == 1, "buffer boundary: only first var parsed");
+    ASSERT(doc->vars[0].value->u.integer == 7, "buffer boundary: correct value from partial");
+
+    hon_doc_free(doc);
+}
+
+/* Serialise to buffer and verify no NUL dependency in the output */
+static void test_serialise_buffer_length(void) {
+    const char *src = "type\n  N = Integer;\nvar x : N = 42;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "serialise buffer: parse succeeds");
+
+    size_t out_len = 0;
+    char *wire = hon_serialise(doc, HON_MODE_WIRE, &out_len);
+    ASSERT(wire != NULL, "serialise buffer: serialise succeeds");
+    ASSERT(out_len > 0, "serialise buffer: non-zero length returned");
+
+    /* Re-parse from the wire buffer using only the returned length */
+    hon_diag_list diags2 = {0};
+    hon_document *doc2 = hon_parse(wire, out_len, &diags2);
+    ASSERT(doc2 != NULL, "serialise buffer: re-parse from wire succeeds");
+    ASSERT(!has_errors(&diags2), "serialise buffer: no errors on re-parse");
+    ASSERT(doc2->vars[0].value->u.integer == 42, "serialise buffer: value preserved");
+
+    hon_doc_free(doc2);
+    free(wire);
+    hon_doc_free(doc);
+}
+
+/* ================================================================
+ * Field Accessor API — hon_get_string / hon_get_long
+ * ================================================================ */
+static void test_accessor_api(void) {
+    const char *src =
+        "type\n"
+        "  Verdict = (Pass, Fail, Unknown);\n"
+        "  Uri = String;\n"
+        "  Info = record\n"
+        "    name    : String;\n"
+        "    verdict : Verdict;\n"
+        "    score   : LongInt;\n"
+        "    active  : Boolean;\n"
+        "    link    : Uri;\n"
+        "  end;\n"
+        "  Items = sequence of Info;\n"
+        "  Report = record\n"
+        "    title : String;\n"
+        "    items : Items;\n"
+        "  end;\n"
+        "var result : Info = (\n"
+        "  name    : 'Alice''s test';\n"
+        "  verdict : Pass;\n"
+        "  score   : 42;\n"
+        "  active  : True;\n"
+        "  link    : 'https://example.com';\n"
+        ");\n"
+        "var report : Report = (\n"
+        "  title : 'Summary';\n"
+        "  items : (\n"
+        "    (name : 'A'; verdict : Pass;  score : 10; active : True;  link : 'a');\n"
+        "    (name : 'B'; verdict : Fail;  score : 20; active : False; link : 'b');\n"
+        "  );\n"
+        ");\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "accessor: parse succeeds");
+
+    /* hon_get_string — basic field */
+    char buf[256];
+    int rc = hon_get_string(doc, "result", "name", buf, sizeof(buf));
+    ASSERT(rc == 0, "accessor: get string name succeeds");
+    ASSERT(strcmp(buf, "Alice's test") == 0, "accessor: string value correct");
+
+    /* hon_get_string — enum field (returned as string) */
+    rc = hon_get_string(doc, "result", "verdict", buf, sizeof(buf));
+    ASSERT(rc == 0, "accessor: get enum as string succeeds");
+    ASSERT(strcmp(buf, "Pass") == 0, "accessor: enum value correct");
+
+    /* hon_get_string — alias to String */
+    rc = hon_get_string(doc, "result", "link", buf, sizeof(buf));
+    ASSERT(rc == 0, "accessor: get alias-to-String succeeds");
+    ASSERT(strcmp(buf, "https://example.com") == 0, "accessor: alias string value correct");
+
+    /* hon_get_long — integer field */
+    long lval;
+    rc = hon_get_long(doc, "result", "score", &lval);
+    ASSERT(rc == 0, "accessor: get long succeeds");
+    ASSERT(lval == 42, "accessor: long value correct");
+
+    /* hon_get_string — missing variable returns -1 */
+    rc = hon_get_string(doc, "nonexistent", "name", buf, sizeof(buf));
+    ASSERT(rc == -1, "accessor: missing variable returns -1");
+
+    /* hon_get_string — missing field returns -1 */
+    rc = hon_get_string(doc, "result", "nonexistent", buf, sizeof(buf));
+    ASSERT(rc == -1, "accessor: missing field returns -1");
+
+    /* hon_get_long — type mismatch returns -2 */
+    rc = hon_get_long(doc, "result", "name", &lval);
+    ASSERT(rc == -2, "accessor: type mismatch returns -2");
+
+    /* hon_get_string — type mismatch on integer field returns -2 */
+    rc = hon_get_string(doc, "result", "score", buf, sizeof(buf));
+    ASSERT(rc == -2, "accessor: string on integer returns -2");
+
+    /* Dot-path navigation into nested records */
+    rc = hon_get_string(doc, "report", "title", buf, sizeof(buf));
+    ASSERT(rc == 0, "accessor: nested record field succeeds");
+    ASSERT(strcmp(buf, "Summary") == 0, "accessor: nested record value correct");
+
+    /* Dot-path navigation into sequences */
+    rc = hon_get_string(doc, "report", "items.0.name", buf, sizeof(buf));
+    ASSERT(rc == 0, "accessor: sequence index.field succeeds");
+    ASSERT(strcmp(buf, "A") == 0, "accessor: sequence[0] value correct");
+
+    rc = hon_get_string(doc, "report", "items.1.verdict", buf, sizeof(buf));
+    ASSERT(rc == 0, "accessor: sequence[1] enum field succeeds");
+    ASSERT(strcmp(buf, "Fail") == 0, "accessor: sequence[1] value correct");
+
+    rc = hon_get_long(doc, "report", "items.1.score", &lval);
+    ASSERT(rc == 0, "accessor: sequence[1] long field succeeds");
+    ASSERT(lval == 20, "accessor: sequence[1] long value correct");
+
+    /* Out-of-bounds sequence index */
+    rc = hon_get_string(doc, "report", "items.5.name", buf, sizeof(buf));
+    ASSERT(rc == -1, "accessor: out-of-bounds sequence returns -1");
+
+    hon_doc_free(doc);
+}
+
 int main(void) {
     /* §2 — Lexical */
     test_bom_rejection();
@@ -1161,6 +1341,14 @@ int main(void) {
 
     /* Construction API */
     test_construction_api();
+
+    /* Buffer parsing (R6 verification) */
+    test_non_nul_terminated_buffer();
+    test_buffer_boundary_with_trailing_syntax();
+    test_serialise_buffer_length();
+
+    /* Field Accessor API */
+    test_accessor_api();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
