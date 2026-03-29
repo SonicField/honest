@@ -773,39 +773,87 @@ static void test_sequence_of_strings(void) {
 }
 
 /* ================================================================
- * Construction API: hon_doc_new + add types + serialize
+ * Construction API: all 5 functions + serialize + round-trip
  * ================================================================ */
 static void test_construction_api(void) {
     hon_document *doc = hon_doc_new();
     ASSERT(doc != NULL, "construction: hon_doc_new");
 
-    /* Add an enum type */
+    /* 1. hon_doc_add_enum */
     hon_str vals[] = {HON_STR_LIT("Red"), HON_STR_LIT("Green"), HON_STR_LIT("Blue")};
     hon_type *color = hon_doc_add_enum(doc, HON_STR_LIT("Color"), vals, 3);
-    ASSERT(color != NULL, "construction: add_enum");
-    ASSERT(doc->type_count == 1, "construction: 1 type");
+    ASSERT(color != NULL, "construction: add_enum succeeds");
+    ASSERT(color->kind == HON_TYPE_ENUM, "construction: enum kind correct");
+    ASSERT(color->u.enumeration.value_count == 3, "construction: 3 enum values");
+    ASSERT(doc->type_count == 1, "construction: 1 type after add_enum");
 
-    /* Add an alias */
-    hon_type *alias = hon_doc_add_alias(doc, HON_STR_LIT("MyInt"), NULL);
-    /* alias might need a target type — if NULL is not accepted, skip */
-    (void)alias;
+    /* 2. hon_doc_add_record — record with a field of type Color */
+    hon_field fields[] = {
+        {HON_STR_LIT("primary"), color},
+    };
+    hon_type *palette = hon_doc_add_record(doc, HON_STR_LIT("Palette"), fields, 1);
+    ASSERT(palette != NULL, "construction: add_record succeeds");
+    ASSERT(palette->kind == HON_TYPE_RECORD, "construction: record kind correct");
+    ASSERT(palette->u.record.field_count == 1, "construction: 1 field");
+    ASSERT(doc->type_count == 2, "construction: 2 types after add_record");
 
-    /* Verify the document can be serialised */
-    if (doc->type_count >= 1) {
-        size_t slen;
-        char *s = hon_serialise(doc, HON_MODE_DOCUMENT, &slen);
-        if (s) {
-            ASSERT(slen > 0, "construction: serialised output non-empty");
-            /* Verify it round-trips */
-            hon_diag_list diags = {0};
-            hon_document *doc2 = hon_parse(s, slen, &diags);
-            if (doc2) {
-                ASSERT(doc2->type_count >= 1,
-                       "construction: round-trip preserves types");
-                hon_doc_free(doc2);
-            }
-            free(s);
+    /* 3. hon_doc_add_sequence — sequence of Color */
+    hon_type *colors = hon_doc_add_sequence(doc, HON_STR_LIT("Colors"), color);
+    ASSERT(colors != NULL, "construction: add_sequence succeeds");
+    ASSERT(colors->kind == HON_TYPE_SEQUENCE, "construction: sequence kind correct");
+    ASSERT(colors->u.sequence.element_type == color,
+           "construction: element type is Color");
+    ASSERT(doc->type_count == 3, "construction: 3 types after add_sequence");
+
+    /* 4. hon_doc_add_alias — alias of Color */
+    hon_type *hue = hon_doc_add_alias(doc, HON_STR_LIT("Hue"), color);
+    ASSERT(hue != NULL, "construction: add_alias succeeds");
+    ASSERT(hue->kind == HON_TYPE_ALIAS, "construction: alias kind correct");
+    ASSERT(hue->u.alias.target == color, "construction: alias target is Color");
+    ASSERT(doc->type_count == 4, "construction: 4 types after add_alias");
+
+    /* 5. hon_doc_add_var — add a variable */
+    hon_value *val = hon_arena_alloc(doc->arena, sizeof(hon_value),
+                                      _Alignof(hon_value));
+    val->kind = HON_VAL_ENUM;
+    val->type = color;
+    val->u.enum_val = HON_STR_LIT("Green");
+    int rc = hon_doc_add_var(doc, HON_STR_LIT("chosen"), color, val);
+    ASSERT(rc == 0, "construction: add_var succeeds");
+    ASSERT(doc->var_count == 1, "construction: 1 var after add_var");
+
+    /* Verify error handling: NULL args rejected */
+    ASSERT(hon_doc_add_enum(NULL, HON_STR_LIT("X"), vals, 3) == NULL,
+           "construction: add_enum rejects NULL doc");
+    ASSERT(hon_doc_add_record(NULL, HON_STR_LIT("X"), NULL, 0) == NULL,
+           "construction: add_record rejects NULL doc");
+    ASSERT(hon_doc_add_sequence(doc, HON_STR_LIT("X"), NULL) == NULL,
+           "construction: add_sequence rejects NULL elem_type");
+    ASSERT(hon_doc_add_alias(doc, HON_STR_LIT("X"), NULL) == NULL,
+           "construction: add_alias rejects NULL target");
+    ASSERT(hon_doc_add_var(doc, HON_STR_LIT("x"), NULL, val) == -1,
+           "construction: add_var rejects NULL type");
+
+    /* Serialise and verify round-trip */
+    size_t slen;
+    char *s = hon_serialise(doc, HON_MODE_DOCUMENT, &slen);
+    ASSERT(s != NULL, "construction: serialise succeeds");
+    if (s) {
+        ASSERT(slen > 0, "construction: serialised output non-empty");
+        hon_diag_list diags = {0};
+        hon_document *doc2 = hon_parse(s, slen, &diags);
+        ASSERT(doc2 != NULL, "construction: round-trip parses");
+        if (doc2) {
+            ASSERT(doc2->type_count == 4,
+                   "construction: round-trip preserves 4 types");
+            ASSERT(doc2->var_count == 1,
+                   "construction: round-trip preserves 1 var");
+            ASSERT(hon_str_eq(doc2->vars[0].value->u.enum_val,
+                              HON_STR_LIT("Green")),
+                   "construction: round-trip preserves value");
+            hon_doc_free(doc2);
         }
+        free(s);
     }
 
     hon_doc_free(doc);
