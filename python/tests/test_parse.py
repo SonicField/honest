@@ -317,6 +317,25 @@ var col : Color = Green;
     assert isinstance(doc["col"], str)
 
 
+def test_attribute_access():
+    """Record fields accessible via attribute syntax."""
+    doc = honest.parse("""
+type
+  Task = record
+    title : String;
+    priority : Integer;
+    done : Boolean;
+  end;
+var task : Task = (title : 'Build parser'; priority : 1; done : False);
+""")
+    task = doc["task"]
+    assert task.title == "Build parser"
+    assert task.priority == 1
+    assert task.done is False
+    with pytest.raises(AttributeError):
+        _ = task.nonexistent
+
+
 def test_unwrap_nested_navigation():
     """Records and sequences stay wrapped for chained navigation."""
     doc = honest.parse("""

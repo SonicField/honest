@@ -173,6 +173,20 @@ class HonValue:
             return default
         return val.unwrap()
 
+    _OWN_ATTRS = frozenset({
+        "kind", "type", "boolean", "integer", "real", "character",
+        "string", "enum_val", "fields", "tag_value", "variant_fields",
+        "elements", "unwrap", "get",
+    })
+
+    def __getattr__(self, name):
+        if name.startswith("_") or name in self._OWN_ATTRS:
+            raise AttributeError(name)
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"no field {name!r}") from None
+
 
 # ---- Variable ----
 
