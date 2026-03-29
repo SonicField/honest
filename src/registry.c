@@ -416,12 +416,12 @@ static int cmp_hash_entries(const void *a, const void *b) {
     return (ea->name.len > eb->name.len) - (ea->name.len < eb->name.len);
 }
 
-char *hon_registry_hash(const hon_registry *reg) {
-    if (!reg || reg->count == 0) return NULL;
+int hon_registry_hash(const hon_registry *reg, char out[65]) {
+    if (!reg || reg->count == 0 || !out) return -1;
 
     /* Collect entries */
     hash_entry *entries = malloc(sizeof(hash_entry) * reg->count);
-    if (!entries) return NULL;
+    if (!entries) return -1;
     uint32_t n = 0;
     for (uint32_t i = 0; i < reg->cap; i++) {
         if (reg->entries[i].occupied) {
@@ -454,12 +454,10 @@ char *hon_registry_hash(const hon_registry *reg) {
     uint8_t digest[32];
     sha256_final(&ctx, digest);
 
-    /* Hex-encode */
-    char *result = malloc(65);
-    if (result) {
-        for (int i = 0; i < 32; i++) {
-            snprintf(result + i * 2, 3, "%02x", digest[i]);
-        }
+    /* Hex-encode into caller-provided buffer */
+    for (int i = 0; i < 32; i++) {
+        snprintf(out + i * 2, 3, "%02x", digest[i]);
     }
-    return result;
+    out[64] = '\0';
+    return 0;
 }

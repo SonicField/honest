@@ -333,12 +333,12 @@ static void test_registry_hash(void) {
     hon_arena *arena = hon_arena_new(0);
     hon_registry *reg = load_rulebook_str(arena, src);
 
-    char *hash1 = hon_registry_hash(reg);
-    ASSERT(hash1 != NULL, "T6: hash returned");
+    char hash1[65], hash2[65];
+    ASSERT(hon_registry_hash(reg, hash1) == 0, "T6: hash returned");
     ASSERT(strlen(hash1) == 64, "T6: hash is 64 hex chars (SHA-256)");
 
     /* Same content produces same hash */
-    char *hash2 = hon_registry_hash(reg);
+    ASSERT(hon_registry_hash(reg, hash2) == 0, "T6: hash2 returned");
     ASSERT(strcmp(hash1, hash2) == 0, "T6: hash is deterministic");
 
     /* Different definitions with same name produce different hash */
@@ -350,14 +350,11 @@ static void test_registry_hash(void) {
 
     hon_arena *arena2 = hon_arena_new(0);
     hon_registry *reg2 = load_rulebook_str(arena2, src2);
-    char *hash3 = hon_registry_hash(reg2);
-    ASSERT(hash3 != NULL, "T6: divergent hash returned");
+    char hash3[65];
+    ASSERT(hon_registry_hash(reg2, hash3) == 0, "T6: divergent hash returned");
     ASSERT(strcmp(hash1, hash3) != 0,
            "T6: different definitions produce different hashes");
 
-    free(hash1);
-    free(hash2);
-    free(hash3);
     hon_arena_free(arena);
     hon_arena_free(arena2);
 }

@@ -277,7 +277,7 @@ hon_registry *hon_registry_new(hon_arena *a);
 int           hon_registry_load(hon_registry *reg, const char *path, hon_diag_list *diags);
 hon_type     *hon_registry_lookup(const hon_registry *reg, hon_str name);
 void          hon_registry_extend(hon_registry *reg, hon_type *type);
-char         *hon_registry_hash(const hon_registry *reg);  /* caller must free() */
+int           hon_registry_hash(const hon_registry *reg, char out[65]);
 
 /* ---- Document Construction (Programmatic API) ---- */
 
