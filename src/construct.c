@@ -31,28 +31,24 @@ hon_document *hon_doc_new(void) {
     return doc;
 }
 
-static void doc_ensure_type_cap(hon_document *doc) {
-    /* Check if we need more space — simple doubling.
-     * We track capacity implicitly as the next power of 2 above type_count. */
-    uint32_t cap = INITIAL_TYPE_CAP;
-    while (cap <= doc->type_count) cap *= 2;
-
+static int doc_ensure_type_cap(hon_document *doc) {
+    /* Grow when type_count reaches a power of 2 at or above initial cap. */
     if (doc->type_count > 0 && (doc->type_count & (doc->type_count - 1)) == 0 &&
         doc->type_count >= INITIAL_TYPE_CAP) {
         uint32_t new_cap = doc->type_count * 2;
         hon_type **new_types = hon_arena_alloc(doc->arena,
             sizeof(hon_type *) * new_cap, _Alignof(hon_type *));
-        if (new_types) {
-            memcpy(new_types, doc->types, sizeof(hon_type *) * doc->type_count);
-            doc->types = new_types;
-        }
+        if (!new_types) return -1; /* OOM — do not increment type_count */
+        memcpy(new_types, doc->types, sizeof(hon_type *) * doc->type_count);
+        doc->types = new_types;
     }
+    return 0;
 }
 
 hon_type *hon_doc_add_enum(hon_document *doc, hon_str name,
                             const hon_str *values, uint32_t count) {
     if (!doc || count == 0) return NULL;
-    doc_ensure_type_cap(doc);
+    if (doc_ensure_type_cap(doc) < 0) return NULL;
 
     hon_type *t = hon_arena_alloc(doc->arena, sizeof(hon_type), _Alignof(hon_type));
     t->kind = HON_TYPE_ENUM;
@@ -71,7 +67,7 @@ hon_type *hon_doc_add_enum(hon_document *doc, hon_str name,
 hon_type *hon_doc_add_record(hon_document *doc, hon_str name,
                               const hon_field *fields, uint32_t count) {
     if (!doc) return NULL;
-    doc_ensure_type_cap(doc);
+    if (doc_ensure_type_cap(doc) < 0) return NULL;
 
     hon_type *t = hon_arena_alloc(doc->arena, sizeof(hon_type), _Alignof(hon_type));
     t->kind = HON_TYPE_RECORD;
@@ -95,7 +91,7 @@ hon_type *hon_doc_add_record(hon_document *doc, hon_str name,
 hon_type *hon_doc_add_sequence(hon_document *doc, hon_str name,
                                 hon_type *elem_type) {
     if (!doc || !elem_type) return NULL;
-    doc_ensure_type_cap(doc);
+    if (doc_ensure_type_cap(doc) < 0) return NULL;
 
     hon_type *t = hon_arena_alloc(doc->arena, sizeof(hon_type), _Alignof(hon_type));
     t->kind = HON_TYPE_SEQUENCE;
@@ -109,7 +105,7 @@ hon_type *hon_doc_add_sequence(hon_document *doc, hon_str name,
 hon_type *hon_doc_add_alias(hon_document *doc, hon_str name,
                              hon_type *target) {
     if (!doc || !target) return NULL;
-    doc_ensure_type_cap(doc);
+    if (doc_ensure_type_cap(doc) < 0) return NULL;
 
     hon_type *t = hon_arena_alloc(doc->arena, sizeof(hon_type), _Alignof(hon_type));
     t->kind = HON_TYPE_ALIAS;

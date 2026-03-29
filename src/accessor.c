@@ -31,7 +31,8 @@ static const hon_value *navigate(const hon_value *val, const char *field_name) {
     if (!pathbuf) return NULL;
 
     const hon_value *cur = val;
-    char *tok = strtok(pathbuf, ".");
+    char *saveptr;
+    char *tok = strtok_r(pathbuf, ".", &saveptr);
 
     while (tok && cur) {
         if (cur->kind == HON_VAL_RECORD) {
@@ -62,7 +63,7 @@ static const hon_value *navigate(const hon_value *val, const char *field_name) {
         } else {
             cur = NULL;
         }
-        tok = strtok(NULL, ".");
+        tok = strtok_r(NULL, ".", &saveptr);
     }
 
     free(pathbuf);
