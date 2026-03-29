@@ -489,6 +489,46 @@ static void test_alias_divergence(void) {
     hon_arena_free(arena);
 }
 
+/*
+ * Test 11: Variant arm divergence — same arm count/tag, different arm fields
+ */
+static void test_variant_arm_divergence(void) {
+    const char *rb_src =
+        "type\n"
+        "  Kind = (A, B);\n"
+        "  Thing = record\n"
+        "    case kind : Kind of\n"
+        "      A : (x : Integer);\n"
+        "      B : (y : Integer);\n"
+        "  end;\n"
+        "var _d : Thing = (kind : A; x : 0);\n";
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = load_rulebook_str(arena, rb_src);
+
+    /* Same arm count, same tag, but different arm field types */
+    const char *doc_src =
+        "type\n"
+        "  Kind = (A, B);\n"
+        "  Thing = record\n"
+        "    case kind : Kind of\n"
+        "      A : (x : String);\n"
+        "      B : (y : String);\n"
+        "  end;\n"
+        "var t : Thing = (kind : A; x : 'hello');\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
+
+    ASSERT(doc != NULL, "T11: parse succeeds");
+    ASSERT(!has_errors(&diags), "T11: zero errors");
+    ASSERT(has_info(&diags), "T11: divergence detected (different arm field types)");
+
+    hon_doc_free(doc);
+    hon_arena_free(arena);
+}
+
 int main(void) {
     test_unknown_enum();
     test_unknown_record();
@@ -500,6 +540,7 @@ int main(void) {
     test_record_type_divergence();
     test_sequence_divergence();
     test_alias_divergence();
+    test_variant_arm_divergence();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

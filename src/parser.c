@@ -458,6 +458,23 @@ static hon_type *parse_type_definition(parser *p) {
                         if (rb_type->u.record.arm_count != t->u.record.arm_count ||
                             !hon_str_eq(rb_type->u.record.tag_name, t->u.record.tag_name)) {
                             divergent = true;
+                        } else {
+                            for (uint32_t i = 0; i < rb_type->u.record.arm_count && !divergent; i++) {
+                                const hon_variant *ra = &rb_type->u.record.arms[i];
+                                const hon_variant *ta = &t->u.record.arms[i];
+                                if (!hon_str_eq(ra->label, ta->label) ||
+                                    ra->field_count != ta->field_count) {
+                                    divergent = true;
+                                } else {
+                                    for (uint32_t j = 0; j < ra->field_count; j++) {
+                                        if (!hon_str_eq(ra->fields[j].name, ta->fields[j].name) ||
+                                            !hon_str_eq(ra->fields[j].type->name, ta->fields[j].type->name)) {
+                                            divergent = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else if (rb_type->kind == HON_TYPE_SEQUENCE) {
