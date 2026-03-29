@@ -525,6 +525,88 @@ static void test_build_self_describing(void) {
     free(out);
 }
 
+static void test_build_type_mismatch(void) {
+    /* Passing a non-numeric string for a LongInt field must error. */
+    char *out = NULL;
+    size_t out_len = 0;
+    int rc = run_cmd(
+        "build/honest-build "
+        "--typedef 'type R = record name : String; age : LongInt; end;' "
+        "--type R "
+        "name=Alice age=not-a-number",
+        NULL, &out, &out_len);
+    ASSERT(rc == 1, "build type mismatch: exit 1 for string in LongInt field");
+
+    free(out);
+}
+
+static void test_build_utf8_round_trip(void) {
+    /* Multi-byte UTF-8 values must survive build→get round-trip.
+     * Uses a temp file for the typedef to avoid shell quoting issues
+     * with multi-byte characters in command-line arguments. */
+    char tmptype[] = "/tmp/honest-test-utf8-type-XXXXXX";
+    int tfd = mkstemp(tmptype);
+    const char *typedef_content =
+        "type\n  R = record\n    s : String;\n  end;\n"
+        "var _d : Boolean = True;\n";
+    write(tfd, typedef_content, strlen(typedef_content));
+    close(tfd);
+
+    /* Chinese characters */
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd),
+        "build/honest-build --rulebook %s --type R 's=测试中文'", tmptype);
+
+    char *build_out = NULL;
+    size_t build_len = 0;
+    int rc = run_cmd(cmd, NULL, &build_out, &build_len);
+    ASSERT(rc == 0, "build utf8 chinese: exit 0");
+
+    char *get_out = NULL;
+    size_t get_len = 0;
+    rc = run_cmd("build/honest-get - result s", build_out, &get_out, &get_len);
+    ASSERT(rc == 0, "build utf8 chinese: get exit 0");
+    strip_trailing_newline(get_out, &get_len);
+    ASSERT(strstr(get_out, "\xe6\xb5\x8b\xe8\xaf\x95") != NULL,
+           "build utf8 chinese: round-trip preserves characters");
+
+    free(build_out);
+    free(get_out);
+
+    /* Accented characters */
+    snprintf(cmd, sizeof(cmd),
+        "build/honest-build --rulebook %s --type R 's=café résumé'", tmptype);
+
+    rc = run_cmd(cmd, NULL, &build_out, &build_len);
+    ASSERT(rc == 0, "build utf8 accented: exit 0");
+
+    rc = run_cmd("build/honest-get - result s", build_out, &get_out, &get_len);
+    ASSERT(rc == 0, "build utf8 accented: get exit 0");
+    strip_trailing_newline(get_out, &get_len);
+    ASSERT(strstr(get_out, "caf") != NULL,
+           "build utf8 accented: round-trip preserves content");
+
+    free(build_out);
+    free(get_out);
+
+    /* Emoji */
+    snprintf(cmd, sizeof(cmd),
+        "build/honest-build --rulebook %s --type R 's=hello 🚀 world'", tmptype);
+
+    rc = run_cmd(cmd, NULL, &build_out, &build_len);
+    ASSERT(rc == 0, "build utf8 emoji: exit 0");
+
+    rc = run_cmd("build/honest-get - result s", build_out, &get_out, &get_len);
+    ASSERT(rc == 0, "build utf8 emoji: get exit 0");
+    strip_trailing_newline(get_out, &get_len);
+    ASSERT(strstr(get_out, "hello") != NULL && strstr(get_out, "world") != NULL,
+           "build utf8 emoji: round-trip preserves surrounding text");
+
+    free(build_out);
+    free(get_out);
+    unlink(tmptype);
+}
+
 /* ================================================================
  * Round-trip: honest-build | honest-get
  * ================================================================ */
@@ -621,6 +703,8 @@ int main(void) {
     test_build_missing_field();
     test_build_boolean();
     test_build_self_describing();
+    test_build_type_mismatch();
+    test_build_utf8_round_trip();
 
     /* Round-trip pipelines */
     test_build_then_get();
