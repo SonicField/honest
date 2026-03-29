@@ -848,6 +848,30 @@ static void test_construction_api(void) {
                    "construction: round-trip preserves 4 types");
             ASSERT(doc2->var_count == 1,
                    "construction: round-trip preserves 1 var");
+
+            /* Verify type kinds survived round-trip */
+            ASSERT(doc2->types[0]->kind == HON_TYPE_ENUM,
+                   "construction: rt type[0] is enum (Color)");
+            ASSERT(hon_str_eq(doc2->types[0]->name, HON_STR_LIT("Color")),
+                   "construction: rt type[0] named Color");
+            ASSERT(doc2->types[0]->u.enumeration.value_count == 3,
+                   "construction: rt Color has 3 values");
+
+            ASSERT(doc2->types[1]->kind == HON_TYPE_RECORD,
+                   "construction: rt type[1] is record (Palette)");
+            ASSERT(doc2->types[1]->u.record.field_count == 1,
+                   "construction: rt Palette has 1 field");
+            ASSERT(hon_str_eq(doc2->types[1]->u.record.fields[0].name,
+                              HON_STR_LIT("primary")),
+                   "construction: rt Palette field is 'primary'");
+
+            ASSERT(doc2->types[2]->kind == HON_TYPE_SEQUENCE,
+                   "construction: rt type[2] is sequence (Colors)");
+
+            ASSERT(doc2->types[3]->kind == HON_TYPE_ALIAS,
+                   "construction: rt type[3] is alias (Hue)");
+
+            /* Verify value survived */
             ASSERT(hon_str_eq(doc2->vars[0].value->u.enum_val,
                               HON_STR_LIT("Green")),
                    "construction: round-trip preserves value");
