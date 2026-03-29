@@ -82,14 +82,17 @@ void hon_arena_free(hon_arena *a) {
 
 bool hon_str_eq(hon_str a, hon_str b) {
     if (a.len != b.len) return false;
+    if (a.len == 0) return true;
     return memcmp(a.data, b.data, a.len) == 0;
 }
 
 hon_str hon_str_dup(hon_arena *a, hon_str s) {
-    if (s.len == 0) return (hon_str){NULL, 0};
+    /* Always allocate, even for empty strings, so .data is never NULL.
+     * This prevents UB from memcmp(NULL, NULL, 0) in hon_str_eq
+     * and NULL dereference in printf("%.*s", ...) format strings. */
     char *copy = hon_arena_alloc(a, s.len + 1, 1);
-    if (!copy) return (hon_str){NULL, 0};
-    memcpy(copy, s.data, s.len);
+    if (!copy) return (hon_str){"", 0};
+    if (s.len > 0 && s.data) memcpy(copy, s.data, s.len);
     copy[s.len] = '\0';
     return (hon_str){copy, s.len};
 }
@@ -110,8 +113,12 @@ const char *hon_primitive_name(hon_primitive p) {
 }
 
 hon_type *hon_resolve_alias(hon_type *t) {
-    while (t && t->kind == HON_TYPE_ALIAS)
+    /* Guard against alias cycles — limit chain depth to 256 */
+    int depth = 0;
+    while (t && t->kind == HON_TYPE_ALIAS && depth < 256) {
         t = t->u.alias.target;
+        depth++;
+    }
     return t;
 }
 

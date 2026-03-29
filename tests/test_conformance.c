@@ -1362,6 +1362,72 @@ static void test_accessor_bool_real_char(void) {
     hon_doc_free(doc);
 }
 
+/* ================================================================
+ * Z1 Hardening — foundation zone fixes
+ * ================================================================ */
+static void test_z1_empty_string_not_null(void) {
+    /* Z1-F3: hon_str_dup for empty strings must return non-NULL data
+     * so that memcmp/printf never receive NULL pointers. */
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    s : String;\n"
+        "  end;\n"
+        "var r : R = (s : '');\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "Z1-F3: empty string parses");
+
+    /* The string value must have non-NULL data even for empty content */
+    ASSERT(doc->vars[0].value->u.record.fields[0].value->u.string.data != NULL,
+           "Z1-F3: empty string .data is not NULL");
+    ASSERT(doc->vars[0].value->u.record.fields[0].value->u.string.len == 0,
+           "Z1-F3: empty string .len is 0");
+
+    /* Round-trip must work without crashing */
+    char *output = hon_serialise(doc, HON_MODE_WIRE, NULL);
+    ASSERT(output != NULL, "Z1-F3: serialise empty string succeeds");
+    free(output);
+
+    hon_doc_free(doc);
+}
+
+static void test_z1_str_eq_empty(void) {
+    /* Z1-F2: hon_str_eq with two empty strings must not UB.
+     * With the fix, empty strings have non-NULL .data. */
+    hon_str a = {.data = "", .len = 0};
+    hon_str b = {.data = "", .len = 0};
+    ASSERT(hon_str_eq(a, b), "Z1-F2: empty strings are equal");
+
+    hon_str c = {.data = "x", .len = 1};
+    ASSERT(!hon_str_eq(a, c), "Z1-F2: empty != non-empty");
+}
+
+static void test_z1_resolve_alias_depth_guard(void) {
+    /* Z1-F7: hon_resolve_alias with deep chain terminates.
+     * Build a chain of 3 aliases: C -> B -> A -> Integer.
+     * Verify resolve returns the primitive. */
+    const char *src =
+        "type\n"
+        "  A = Integer;\n"
+        "  B = A;\n"
+        "  C = B;\n"
+        "var x : C = 42;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "Z1-F7: alias chain parses");
+
+    hon_type *c_type = doc->types[2]; /* C */
+    hon_type *resolved = hon_resolve_alias(c_type);
+    ASSERT(resolved != NULL, "Z1-F7: resolve succeeds");
+    ASSERT(resolved->kind == HON_TYPE_PRIMITIVE, "Z1-F7: resolves to primitive");
+    ASSERT(resolved->u.prim == HON_PRIM_INTEGER, "Z1-F7: resolves to Integer");
+
+    hon_doc_free(doc);
+}
+
 int main(void) {
     /* §2 — Lexical */
     test_bom_rejection();
@@ -1424,6 +1490,11 @@ int main(void) {
     /* Field Accessor API */
     test_accessor_api();
     test_accessor_bool_real_char();
+
+    /* Z1 Hardening */
+    test_z1_empty_string_not_null();
+    test_z1_str_eq_empty();
+    test_z1_resolve_alias_depth_guard();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

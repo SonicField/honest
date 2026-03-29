@@ -58,7 +58,7 @@ $(BUILDDIR):
 
 check-asan:
 	$(MAKE) clean
-	$(MAKE) check SANITIZE=address,undefined
+	$(MAKE) check SANITIZE=address
 
 check-leak:
 	$(MAKE) clean

@@ -53,7 +53,12 @@ void hon_diag_push(hon_diag_list *dl, hon_arena *a,
 
     size_t msg_len = strlen(buf);
     char *msg = hon_arena_alloc(a, msg_len + 1, 1);
-    if (msg) memcpy(msg, buf, msg_len + 1);
+    if (msg) {
+        memcpy(msg, buf, msg_len + 1);
+    } else {
+        /* Arena exhausted — use static fallback so .message is never NULL */
+        msg = "(diagnostic message lost — arena exhausted)";
+    }
 
     dl->items[dl->count++] = (hon_diagnostic){
         .level   = level,
