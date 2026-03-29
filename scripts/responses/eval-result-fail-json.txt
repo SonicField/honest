@@ -1,0 +1,8 @@
+Here is my evaluation:
+
+{
+  "verdict": "Pass",
+  "reasoning": "The implementation looks correct."
+}
+
+The test passes all criteria.

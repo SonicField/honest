@@ -1,0 +1,20 @@
+type
+  SessionMeta = record
+    session_id    : String;
+    handle        : String;
+    model         : String;
+    nbs_ts_handle : String;
+    project_root  : String;
+    pid           : LongInt;
+    started       : String;
+  end;
+
+var result : SessionMeta = (
+  session_id    : 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  handle        : 'generalist';
+  model         : 'claude-opus-4-6';
+  nbs_ts_handle : 'nbs-ts-001';
+  project_root  : '/data/users/alexturner/honest';
+  pid           : 42567;
+  started       : '2026-03-29T14:00:00Z';
+);
