@@ -221,6 +221,16 @@ def test_missing_type_keyword():
         honest.parse("var x : Integer = 1;\n")
 
 
+def test_cyclic_alias_depth_limit():
+    """Z7-F1: alias resolve() raises ValueError on cyclic/deep chains."""
+    from honest.types import HonType, TypeKind
+    a = HonType(kind=TypeKind.ALIAS, name="A")
+    b = HonType(kind=TypeKind.ALIAS, name="B", target=a)
+    a.target = b  # create cycle: A -> B -> A -> ...
+    with pytest.raises(ValueError, match="alias chain exceeds maximum depth"):
+        a.resolve()
+
+
 def test_control_char_in_string_rejected():
     with pytest.raises(honest.ParseError):
         honest.parse("type\n  S = String;\nvar s : S = 'hello\x01world';\n")
@@ -411,6 +421,31 @@ That is my assessment.
 def test_extract_no_document():
     with pytest.raises(ValueError, match="No valid Honest document found"):
         honest.extract("This is just plain text with no Honest content.")
+
+
+def test_sequence_trailing_semicolon():
+    """Z7-F2: trailing semicolons in sequences are accepted (optional separator)."""
+    # With trailing semicolon
+    doc1 = honest.parse("""
+type
+  Items = sequence of Integer;
+var items : Items = (1; 2; 3;);
+""")
+    seq1 = doc1["items"]
+    assert len(seq1.elements) == 3
+    assert seq1[0] == 1
+    assert seq1[2] == 3
+
+    # Without trailing semicolon
+    doc2 = honest.parse("""
+type
+  Items = sequence of Integer;
+var items : Items = (1; 2; 3);
+""")
+    seq2 = doc2["items"]
+    assert len(seq2.elements) == 3
+    assert seq2[0] == 1
+    assert seq2[2] == 3
 
 
 def test_extract_bare_fence():
