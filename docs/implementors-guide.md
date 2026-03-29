@@ -486,3 +486,13 @@ Building a conformant Honest parser is straightforward if you follow the format'
 5. **Arena allocation.** Documents are trees with no cycles. Allocate together, free together.
 
 The format was designed to be easy to implement correctly. If your parser is becoming complex, you may be solving a problem the format does not have.
+
+## Reference Implementations
+
+Two reference implementations are provided:
+
+- **C** (`src/`, `include/honest.h`) — arena-allocated, single-pass, ~2500 lines. Includes typed field accessors (`hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char`) and 627 tests with AddressSanitizer coverage.
+
+- **Python** (`python/honest/`) — pure Python, ~600 lines. Demonstrates Pythonic API design with auto-unwrapping (leaf values return native types) and attribute-style access. Includes `extract()` for finding Honest documents in mixed text. 32 pytest tests.
+
+Both implementations accept the same inputs and produce the same outputs. Use the C test suite's inputs as the conformance baseline for any new implementation.

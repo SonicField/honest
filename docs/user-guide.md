@@ -500,3 +500,54 @@ var report : Report = (
 ```
 
 A human can read this and understand the analysis. An AI can interpret the structure and act on the findings. A program can parse the typed data and route, store, or transform it. All three consumers served equally, from a single document.
+
+---
+
+## Tooling
+
+### Command-Line Tools
+
+Honest includes five CLI tools:
+
+- **`honest-parse`** — parse and validate a document (`honest-parse file.honest` or `honest-parse -`)
+- **`honest-fmt`** — reformat a document (pretty-print or wire mode with `-w`)
+- **`honest-get`** — extract field values from a document (`honest-get file.honest var field1 field2`)
+- **`honest-build`** — construct a document from shell key=value arguments
+- **`honest-extract`** — extract the first valid Honest document from mixed text (e.g. AI output)
+
+### Building Documents from Shell
+
+```bash
+honest-build --type SessionMeta --rulebook types.honest \
+  session_id="$UUID" handle="$HANDLE" pid=$$
+```
+
+Nested records use dot-paths: `data.x=42 data.y=world`. Sequences use numeric indices: `items.0.name=widget items.1.name=gadget`.
+
+### Python Library
+
+```python
+import honest
+
+# Parse
+doc = honest.parse_file("message.honest")
+
+# Access values (auto-unwraps to native Python types)
+doc["result"]["name"]      # → 'Alice' (str)
+doc["result"]["score"]     # → 42 (int)
+doc["result"]["active"]    # → True (bool)
+
+# Attribute-style access
+task = doc["task"]
+task.title                 # → 'Build parser' (str)
+
+# Extract from AI output
+doc = honest.extract(ai_response_text)
+verdict = doc["result"]["verdict"]  # → 'Pass' (str)
+
+# Serialise
+honest.serialise(doc)                # document mode
+honest.serialise(doc, wire=True)     # wire mode
+```
+
+Install: `pip install -e python/`
