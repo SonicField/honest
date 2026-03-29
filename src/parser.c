@@ -421,75 +421,7 @@ static hon_type *parse_type_definition(parser *p) {
         if (p->registry) {
             hon_type *rb_type = hon_registry_lookup(p->registry, t->name);
             if (rb_type) {
-                /* Type exists in rulebook — check for divergence */
-                bool divergent = false;
-                if (rb_type->kind != t->kind) {
-                    divergent = true;
-                } else if (rb_type->kind == HON_TYPE_ENUM) {
-                    if (rb_type->u.enumeration.value_count != t->u.enumeration.value_count) {
-                        divergent = true;
-                    } else {
-                        for (uint32_t i = 0; i < rb_type->u.enumeration.value_count; i++) {
-                            if (!hon_str_eq(rb_type->u.enumeration.values[i],
-                                            t->u.enumeration.values[i])) {
-                                divergent = true;
-                                break;
-                            }
-                        }
-                    }
-                } else if (rb_type->kind == HON_TYPE_RECORD) {
-                    if (rb_type->u.record.field_count != t->u.record.field_count) {
-                        divergent = true;
-                    } else {
-                        for (uint32_t i = 0; i < rb_type->u.record.field_count; i++) {
-                            if (!hon_str_eq(rb_type->u.record.fields[i].name,
-                                            t->u.record.fields[i].name) ||
-                                !hon_str_eq(rb_type->u.record.fields[i].type->name,
-                                            t->u.record.fields[i].type->name)) {
-                                divergent = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!divergent && rb_type->u.record.has_variant != t->u.record.has_variant) {
-                        divergent = true;
-                    }
-                    if (!divergent && rb_type->u.record.has_variant && t->u.record.has_variant) {
-                        if (rb_type->u.record.arm_count != t->u.record.arm_count ||
-                            !hon_str_eq(rb_type->u.record.tag_name, t->u.record.tag_name)) {
-                            divergent = true;
-                        } else {
-                            for (uint32_t i = 0; i < rb_type->u.record.arm_count && !divergent; i++) {
-                                const hon_variant *ra = &rb_type->u.record.arms[i];
-                                const hon_variant *ta = &t->u.record.arms[i];
-                                if (!hon_str_eq(ra->label, ta->label) ||
-                                    ra->field_count != ta->field_count) {
-                                    divergent = true;
-                                } else {
-                                    for (uint32_t j = 0; j < ra->field_count; j++) {
-                                        if (!hon_str_eq(ra->fields[j].name, ta->fields[j].name) ||
-                                            !hon_str_eq(ra->fields[j].type->name, ta->fields[j].type->name)) {
-                                            divergent = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (rb_type->kind == HON_TYPE_SEQUENCE) {
-                    if (!hon_str_eq(rb_type->u.sequence.element_type->name,
-                                    t->u.sequence.element_type->name)) {
-                        divergent = true;
-                    }
-                } else if (rb_type->kind == HON_TYPE_ALIAS) {
-                    if (!hon_str_eq(rb_type->u.alias.target->name,
-                                    t->u.alias.target->name)) {
-                        divergent = true;
-                    }
-                }
-
-                if (divergent) {
+                if (!hon_types_equal(rb_type, t)) {
                     hon_diag_push(p->diags, p->arena, HON_DIAG_INFO,
                                   name_tok.line, name_tok.col,
                                   "type '%.*s' diverges from rulebook",

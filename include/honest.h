@@ -301,6 +301,7 @@ bool          hon_str_eq(hon_str a, hon_str b);
 hon_str       hon_str_dup(hon_arena *a, hon_str s);
 const char   *hon_primitive_name(hon_primitive p);
 hon_type     *hon_resolve_alias(hon_type *t);
+bool          hon_types_equal(const hon_type *a, const hon_type *b);
 
 #ifdef __cplusplus
 }

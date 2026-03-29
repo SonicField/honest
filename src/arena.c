@@ -114,3 +114,65 @@ hon_type *hon_resolve_alias(hon_type *t) {
         t = t->u.alias.target;
     return t;
 }
+
+static bool fields_equal(const hon_field *a, const hon_field *b, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        if (!hon_str_eq(a[i].name, b[i].name)) return false;
+        if (!hon_str_eq(a[i].type->name, b[i].type->name)) return false;
+    }
+    return true;
+}
+
+bool hon_types_equal(const hon_type *a, const hon_type *b) {
+    if (a == b) return true;
+    if (!a || !b) return false;
+    if (a->kind != b->kind) return false;
+
+    switch (a->kind) {
+    case HON_TYPE_PRIMITIVE:
+        return a->u.prim == b->u.prim;
+
+    case HON_TYPE_ENUM:
+        if (a->u.enumeration.value_count != b->u.enumeration.value_count)
+            return false;
+        for (uint32_t i = 0; i < a->u.enumeration.value_count; i++) {
+            if (!hon_str_eq(a->u.enumeration.values[i],
+                            b->u.enumeration.values[i]))
+                return false;
+        }
+        return true;
+
+    case HON_TYPE_RECORD:
+        if (a->u.record.field_count != b->u.record.field_count) return false;
+        if (!fields_equal(a->u.record.fields, b->u.record.fields,
+                          a->u.record.field_count))
+            return false;
+        if (a->u.record.has_variant != b->u.record.has_variant) return false;
+        if (a->u.record.has_variant) {
+            if (!hon_str_eq(a->u.record.tag_name, b->u.record.tag_name))
+                return false;
+            if (!hon_str_eq(a->u.record.tag_type->name,
+                            b->u.record.tag_type->name))
+                return false;
+            if (a->u.record.arm_count != b->u.record.arm_count) return false;
+            for (uint32_t i = 0; i < a->u.record.arm_count; i++) {
+                const hon_variant *va = &a->u.record.arms[i];
+                const hon_variant *vb = &b->u.record.arms[i];
+                if (!hon_str_eq(va->label, vb->label)) return false;
+                if (va->field_count != vb->field_count) return false;
+                if (!fields_equal(va->fields, vb->fields, va->field_count))
+                    return false;
+            }
+        }
+        return true;
+
+    case HON_TYPE_SEQUENCE:
+        return hon_str_eq(a->u.sequence.element_type->name,
+                          b->u.sequence.element_type->name);
+
+    case HON_TYPE_ALIAS:
+        return hon_str_eq(a->u.alias.target->name,
+                          b->u.alias.target->name);
+    }
+    return false;
+}
