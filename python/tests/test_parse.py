@@ -281,3 +281,63 @@ var r : R = (a : 1; b : 'hello');
     val = doc["r"]
     assert val.get("a").integer == 1
     assert val.get("missing") is None
+
+
+# ---- Extract ----
+
+def test_extract_from_code_fence():
+    text = """Here is my evaluation:
+
+```pascal
+type
+  Verdict = (Pass, Fail);
+  Result = record
+    verdict : Verdict;
+    reasoning : String;
+  end;
+var result : Result = (
+  verdict : Pass;
+  reasoning : 'All criteria met';
+);
+```
+
+The test passes because...
+"""
+    doc = honest.extract(text)
+    assert doc["result"]["verdict"].enum_val == "Pass"
+    assert doc["result"]["reasoning"].string == "All criteria met"
+
+
+def test_extract_from_plain_text():
+    text = """I have evaluated the submission.
+
+type
+  Verdict = (Pass, Fail, Unknown);
+  EvalResult = record
+    verdict : Verdict;
+    reasoning : String;
+  end;
+var result : EvalResult = (
+  verdict : Fail;
+  reasoning : 'Missing docs';
+);
+
+That is my assessment.
+"""
+    doc = honest.extract(text)
+    assert doc["result"]["verdict"].enum_val == "Fail"
+
+
+def test_extract_no_document():
+    with pytest.raises(ValueError, match="No valid Honest document found"):
+        honest.extract("This is just plain text with no Honest content.")
+
+
+def test_extract_bare_fence():
+    text = """```
+type
+  N = Integer;
+var n : N = 42;
+```"""
+    doc = honest.extract(text)
+    assert doc["n"].integer == 42

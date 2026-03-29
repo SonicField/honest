@@ -17,13 +17,14 @@ Usage:
 
 from .parser import parse, parse_file, ParseError
 from .serialise import serialise
+from .extract import extract
 from .types import (
     Document, Field, FieldValue, HonType, HonValue,
     Primitive, TypeKind, ValueKind, Variable, Variant,
 )
 
 __all__ = [
-    "parse", "parse_file", "serialise", "ParseError",
+    "parse", "parse_file", "serialise", "extract", "ParseError",
     "Document", "Field", "FieldValue", "HonType", "HonValue",
     "Primitive", "TypeKind", "ValueKind", "Variable", "Variant",
 ]
