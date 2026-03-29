@@ -82,9 +82,6 @@ int hon_get_string(const hon_document *doc,
     const hon_value *val = navigate(var->value, field_name);
     if (!val) return -1;
 
-    /* Resolve alias on the value's type to check actual kind */
-    hon_type *resolved = val->type ? hon_resolve_alias(val->type) : NULL;
-
     if (val->kind == HON_VAL_STRING) {
         size_t full_len = val->u.string.len;
         size_t copy_len = full_len < bufsz ? full_len : bufsz - 1;
@@ -100,13 +97,6 @@ int hon_get_string(const hon_document *doc,
         memcpy(buf, val->u.enum_val.data, copy_len);
         buf[copy_len] = '\0';
         return full_len >= bufsz ? (int)(full_len + 1) : 0;
-    }
-
-    /* Check if the underlying type is String (or alias of String) */
-    if (resolved && resolved->kind == HON_TYPE_PRIMITIVE &&
-        resolved->u.prim == HON_PRIM_STRING) {
-        /* The value should have been a string but wasn't */
-        return -2;
     }
 
     return -2; /* not a string type */

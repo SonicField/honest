@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 static char *read_all(FILE *f, size_t *out_len) {
     size_t cap = 4096, len = 0;

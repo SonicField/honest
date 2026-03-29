@@ -36,7 +36,7 @@ Read it top to bottom. The declarations tell you what the types mean. The data u
 | Self-describing | Shape only | No (needs .proto) | Full types in every document |
 | Discriminated unions | No | Oneof (limited) | Variant records (first-class) |
 | Semantic types | No | No | Enumerations, type aliases |
-| Unknown fields | Ignored or dropped | Parsed, understood, extended |
+| Unknown fields | Ignored or dropped | Preserved as bytes | Parsed, understood, extended |
 
 ## Documentation
 
