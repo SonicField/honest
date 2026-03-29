@@ -48,12 +48,14 @@ Read it top to bottom. The declarations tell you what the types mean. The data u
 
 ## Building
 
-Honest includes a C reference implementation: `libhonest` (a library) and a set of command-line tools.
+Honest includes a C reference implementation (`libhonest` + CLI tools) and a Python library.
 
 ```bash
 make            # build libhonest and CLI tools
-make check      # run the test suite
+make check      # run C test suite (637 tests)
 make check-asan # run tests under AddressSanitizer
+make audit      # run all verification: C tests, ASAN, pytest, conformance
+pip install python/  # install Python library
 ```
 
 ### C Library
@@ -81,6 +83,33 @@ char *output = hon_serialise(doc, HON_MODE_DOCUMENT, NULL);
 /* Clean up */
 hon_diag_free(&diags);
 hon_doc_free(doc);
+```
+
+### Python Library
+
+```python
+import honest
+
+# Parse a document
+doc = honest.parse(text)
+print(doc['result'].summary)    # dict access on doc, attribute access on values
+
+# Access fields
+score = doc['result'].score      # auto-unwrapped to int
+tags  = list(doc['tags'])        # sequence → iterable of native types
+
+# Serialise
+text = honest.serialise(doc)                     # document mode (human-readable)
+wire = honest.serialise(doc, wire=True)          # wire mode (minimal, canonical)
+
+# Extract Honest from mixed text (e.g. AI output)
+doc = honest.extract(ai_response_text)
+```
+
+Install from the project directory:
+
+```bash
+pip install python/
 ```
 
 ### Command-Line Tools
@@ -136,7 +165,11 @@ honest/
   src/                          # C reference implementation
   tools/                        # CLI tools (honest-parse, honest-fmt, honest-get,
                                 #            honest-build, honest-extract)
-  tests/                        # Test suite
+  tests/                        # C test suite (637 tests, 7 suites)
+  python/
+    honest/                     # Python library (parse, serialise, extract)
+    tests/                      # Python test suite (34 tests)
+  scripts/                      # Cross-implementation conformance tests
 ```
 
 ## Design Principles
@@ -149,7 +182,7 @@ honest/
 
 ## Status
 
-The format specification and C reference implementation are complete.
+The format specification and both reference implementations are complete.
 
 | Component | Status |
 |-----------|--------|
@@ -158,9 +191,10 @@ The format specification and C reference implementation are complete.
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | Complete |
+| C library (libhonest) | Complete — 637 tests, ASAN clean |
+| Python library | Complete — 34 tests |
 | CLI tools | Complete |
-| Test suite (588 tests) | Complete |
+| Cross-impl conformance | Complete — 6/6 byte-identical wire output |
 
 ## License
 
