@@ -3,11 +3,8 @@
 #
 # For each example file, verifies:
 # 1. Both C and Python parsers accept the input
-# 2. C wire output can be parsed by the Python parser
-# 3. Python wire output can be parsed by the C parser
-#
-# This proves cross-implementation compatibility even when wire-mode
-# formatting differs (e.g. trailing semicolons in sequences).
+# 2. C and Python wire-mode outputs are byte-identical
+# 3. Each parser can parse the other's wire output
 #
 # Exit 0 = all files conformant, 1 = mismatch or error.
 
@@ -92,8 +89,14 @@ print(serialise(doc, wire=True), end='')
         fail=1
     fi
 
+    # 4. Wire outputs are byte-identical
+    if [ "$c_wire" != "$py_wire" ]; then
+        echo "FAIL: wire output differs for $name"
+        fail=1
+    fi
+
     if [ "$fail" -eq 0 ]; then
-        echo "PASS: $name"
+        echo "PASS: $name (parse + wire-identical + cross-parse)"
     else
         FAILURES=$((FAILURES + 1))
     fi

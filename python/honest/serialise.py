@@ -57,13 +57,13 @@ def _serialise_document(doc: Document) -> str:
 
 def _serialise_wire(doc: Document) -> str:
     parts = []
-    parts.append("type ")
+    parts.append("type")
 
     for t in doc.types:
-        _serialise_type_wire(t, parts)
         parts.append(" ")
+        _serialise_type_wire(t, parts)
 
-    parts.append("\n")
+    parts.append("\n\n")
 
     for v in doc.vars:
         parts.append(f"var {v.name} : {v.type.name} = ")
@@ -221,9 +221,10 @@ def _serialise_value_wire(v: HonValue, parts: list[str]):
         if not v.elements:
             parts.append("()")
         else:
-            parts.append("( ")
+            parts.append("(")
             for i, elem in enumerate(v.elements):
                 if i > 0:
-                    parts.append("; ")
+                    parts.append(";")
+                parts.append(" ")
                 _serialise_value_wire(elem, parts)
-            parts.append("; )")
+            parts.append(")")
