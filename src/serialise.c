@@ -27,6 +27,7 @@ typedef struct {
 static void buf_init(outbuf *b, hon_serial_mode mode) {
     b->cap    = 4096;
     b->data   = malloc(b->cap);
+    if (!b->data) { b->cap = 0; }
     b->len    = 0;
     b->indent = 0;
     b->mode   = mode;
@@ -34,8 +35,11 @@ static void buf_init(outbuf *b, hon_serial_mode mode) {
 
 static void buf_grow(outbuf *b, size_t needed) {
     while (b->len + needed >= b->cap) {
-        b->cap *= 2;
-        b->data = realloc(b->data, b->cap);
+        size_t new_cap = b->cap ? b->cap * 2 : 4096;
+        char *new_data = realloc(b->data, new_cap);
+        if (!new_data) return; /* OOM — subsequent writes will be truncated */
+        b->data = new_data;
+        b->cap = new_cap;
     }
 }
 

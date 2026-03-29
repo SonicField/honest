@@ -324,11 +324,22 @@ static void sha256_final(sha256_ctx *c, uint8_t out[32]) {
 /* Append to a dynamically growing buffer */
 typedef struct { char *data; size_t len; size_t cap; } hashbuf;
 
-static void hb_init(hashbuf *b) { b->cap = 256; b->data = malloc(b->cap); b->len = 0; }
+static int hb_init(hashbuf *b) {
+    b->cap = 256;
+    b->data = malloc(b->cap);
+    b->len = 0;
+    return b->data ? 0 : -1;
+}
 static void hb_free(hashbuf *b) { free(b->data); }
 
 static void hb_append(hashbuf *b, const char *s, size_t n) {
-    while (b->len + n >= b->cap) { b->cap *= 2; b->data = realloc(b->data, b->cap); }
+    while (b->len + n >= b->cap) {
+        size_t new_cap = b->cap * 2;
+        char *new_data = realloc(b->data, new_cap);
+        if (!new_data) return; /* OOM — hash will be partial but won't crash */
+        b->data = new_data;
+        b->cap = new_cap;
+    }
     memcpy(b->data + b->len, s, n);
     b->len += n;
 }
@@ -439,7 +450,10 @@ int hon_registry_hash(const hon_registry *reg, char out[65]) {
     sha256_init(&ctx);
 
     hashbuf buf;
-    hb_init(&buf);
+    if (hb_init(&buf) < 0) {
+        free(entries);
+        return -1;
+    }
 
     for (uint32_t i = 0; i < n; i++) {
         buf.len = 0; /* reset buffer for each type */
