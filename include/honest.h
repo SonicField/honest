@@ -242,12 +242,14 @@ typedef struct {
     hon_diagnostic *items;
     uint32_t        count;
     uint32_t        cap;
+    bool            owns_memory;  /* true when items are malloc'd (failed parse) */
 } hon_diag_list;
 
 void hon_diag_init(hon_diag_list *dl, hon_arena *a);
 void hon_diag_push(hon_diag_list *dl, hon_arena *a,
                    hon_diag_level level, uint32_t line, uint32_t col,
                    const char *fmt, ...);
+void hon_diag_free(hon_diag_list *dl);
 
 /* ---- Forward Declarations ---- */
 

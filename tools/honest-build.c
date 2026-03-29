@@ -417,12 +417,14 @@ static int is_valid_utf8(const char *s, size_t len) {
 
 static void usage(const char *prog) {
     fprintf(stderr,
-        "Usage: %s --type TypeName [--rulebook file | --typedef 'type ...'] "
+        "Usage: %s --type TypeName [--var-name name] "
+        "[--rulebook file | --typedef 'type ...'] "
         "field=value ...\n", prog);
 }
 
 int main(int argc, char **argv) {
     const char *type_name = NULL;
+    const char *var_name = "result";
     const char *rulebook_path = NULL;
     const char *typedef_text = NULL;
 
@@ -431,6 +433,8 @@ int main(int argc, char **argv) {
     while (argi < argc && argv[argi][0] == '-') {
         if (strcmp(argv[argi], "--type") == 0 && argi + 1 < argc) {
             type_name = argv[++argi];
+        } else if (strcmp(argv[argi], "--var-name") == 0 && argi + 1 < argc) {
+            var_name = argv[++argi];
         } else if (strcmp(argv[argi], "--rulebook") == 0 && argi + 1 < argc) {
             rulebook_path = argv[++argi];
         } else if (strcmp(argv[argi], "--typedef") == 0 && argi + 1 < argc) {
@@ -473,19 +477,8 @@ int main(int argc, char **argv) {
             return 1;
         }
     } else if (typedef_text) {
-        /* Parse inline type definition. Add a dummy var to make it a valid doc. */
         size_t tlen = strlen(typedef_text);
-        /* We need a complete document: type defs + at least one var.
-         * But we just want the types. Parse as-is and check if it works,
-         * or add a dummy var. */
-        const char *suffix = "\nvar _dummy : Boolean = True;\n";
-        size_t slen = strlen(suffix);
-        char *full = malloc(tlen + slen + 1);
-        if (!full) { fprintf(stderr, "Out of memory\n"); return 1; }
-        memcpy(full, typedef_text, tlen);
-        memcpy(full + tlen, suffix, slen + 1);
-        type_doc = hon_parse(full, tlen + slen, &diags);
-        free(full);
+        type_doc = hon_parse(typedef_text, tlen, &diags);
         if (!type_doc) {
             fprintf(stderr, "Failed to parse type definition\n");
             for (uint32_t i = 0; i < diags.count; i++)
@@ -548,15 +541,8 @@ int main(int argc, char **argv) {
 
     /* Add the variable to type_doc directly and serialise.
      * type_doc already has all type declarations; we just add the data. */
-    hon_doc_add_var(type_doc, HON_STR_LIT("result"), target_type, val);
-
-    /* If we used a --typedef with dummy var, remove the dummy by adjusting var_count.
-     * The dummy is the first var if typedef was used. */
-    if (typedef_text && type_doc->var_count > 1) {
-        /* Shift vars to remove the dummy */
-        type_doc->vars[0] = type_doc->vars[type_doc->var_count - 1];
-        type_doc->var_count = 1;
-    }
+    hon_str vname = {var_name, strlen(var_name)};
+    hon_doc_add_var(type_doc, vname, target_type, val);
 
     /* Serialise */
     size_t out_len;

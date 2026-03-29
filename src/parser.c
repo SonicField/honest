@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 /*
  * Honest parser — parses declarations and data sections.
  *
@@ -979,6 +981,23 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
 
     hon_document *doc = parse_document(&p);
     if (!doc) {
+        /* Copy diagnostics to malloc before freeing the arena,
+         * so callers can still inspect errors after a failed parse. */
+        if (diags && diags->count > 0) {
+            hon_diagnostic *safe = malloc(sizeof(hon_diagnostic) * diags->count);
+            if (safe) {
+                for (uint32_t di = 0; di < diags->count; di++) {
+                    safe[di] = diags->items[di];
+                    if (diags->items[di].message)
+                        safe[di].message = strdup(diags->items[di].message);
+                }
+                diags->items = safe;
+                diags->owns_memory = true;
+            } else {
+                diags->items = NULL;
+                diags->count = 0;
+            }
+        }
         hon_arena_free(arena);
         return NULL;
     }
@@ -1021,6 +1040,21 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
 
     hon_document *doc = parse_document(&p);
     if (!doc) {
+        if (diags && diags->count > 0) {
+            hon_diagnostic *safe = malloc(sizeof(hon_diagnostic) * diags->count);
+            if (safe) {
+                for (uint32_t di = 0; di < diags->count; di++) {
+                    safe[di] = diags->items[di];
+                    if (diags->items[di].message)
+                        safe[di].message = strdup(diags->items[di].message);
+                }
+                diags->items = safe;
+                diags->owns_memory = true;
+            } else {
+                diags->items = NULL;
+                diags->count = 0;
+            }
+        }
         hon_arena_free(arena);
         return NULL;
     }

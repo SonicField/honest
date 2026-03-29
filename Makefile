@@ -20,7 +20,14 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c,$(BUILDDIR)/test_%,$(TEST_SRCS))
 
 LIBNAME = libhonest.a
 
-.PHONY: all lib tools tests check clean
+SANITIZE ?=
+
+ifdef SANITIZE
+CFLAGS  += -fsanitize=$(SANITIZE) -fno-omit-frame-pointer -g
+LDFLAGS += -fsanitize=$(SANITIZE)
+endif
+
+.PHONY: all lib tools tests check check-asan check-leak clean
 
 all: lib tools
 
@@ -30,7 +37,7 @@ tools: lib $(TOOL_BINS)
 
 tests: lib $(TEST_BINS)
 
-check: tests
+check: tests tools
 	@for t in $(TEST_BINS); do echo "=== $$t ==="; $$t || exit 1; done
 	@echo "All tests passed."
 
@@ -41,13 +48,21 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/%: $(TOOLDIR)/%.c $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest -o $@
+	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@
 
 $(BUILDDIR)/test_%: $(TESTDIR)/%.c $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest -o $@
+	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
+
+check-asan:
+	$(MAKE) clean
+	$(MAKE) check SANITIZE=address,undefined
+
+check-leak:
+	$(MAKE) clean
+	$(MAKE) check SANITIZE=leak
 
 clean:
 	rm -rf $(BUILDDIR)

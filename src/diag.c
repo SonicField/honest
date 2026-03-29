@@ -19,6 +19,18 @@ void hon_diag_init(hon_diag_list *dl, hon_arena *a) {
                                 _Alignof(hon_diagnostic));
 }
 
+void hon_diag_free(hon_diag_list *dl) {
+    if (!dl || !dl->items || !dl->owns_memory) return;
+    for (uint32_t i = 0; i < dl->count; i++) {
+        free((void *)dl->items[i].message);
+    }
+    free(dl->items);
+    dl->items = NULL;
+    dl->count = 0;
+    dl->cap = 0;
+    dl->owns_memory = false;
+}
+
 void hon_diag_push(hon_diag_list *dl, hon_arena *a,
                    hon_diag_level level, uint32_t line, uint32_t col,
                    const char *fmt, ...) {

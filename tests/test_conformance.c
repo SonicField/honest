@@ -51,6 +51,7 @@ static void test_bom_rejection(void) {
     /* BOM MUST NOT be present — parser must reject or produce an error */
     ASSERT(!doc || has_errors(&diags), "§2.1: BOM rejected with error diagnostic");
 
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 
@@ -102,6 +103,7 @@ static void test_unterminated_brace_comment(void) {
     hon_document *doc = hon_parse(src, strlen(src), &diags);
 
     ASSERT(has_errors(&diags), "§2.3: unterminated { comment produces error");
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 
@@ -116,6 +118,7 @@ static void test_unterminated_paren_star_comment(void) {
     hon_document *doc = hon_parse(src, strlen(src), &diags);
 
     ASSERT(has_errors(&diags), "§2.3: unterminated (* comment produces error");
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 
@@ -153,6 +156,7 @@ static void test_case_sensitive_keywords(void) {
     hon_document *doc = hon_parse(src, strlen(src), &diags);
 
     ASSERT(has_errors(&diags), "§2.5: 'Type' (capital) is not keyword 'type'");
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 
@@ -339,6 +343,7 @@ static void test_forward_reference_rejected(void) {
     hon_document *doc = hon_parse(src, strlen(src), &diags);
 
     ASSERT(has_errors(&diags), "§3.7: forward reference produces error");
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 
@@ -357,6 +362,7 @@ static void test_duplicate_type_name(void) {
 
     /* Duplicate type name should at least produce a diagnostic */
     ASSERT(has_errors(&diags), "§3.7: duplicate type name produces error");
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 
@@ -370,6 +376,7 @@ static void test_missing_declarations(void) {
     hon_document *doc = hon_parse(src, strlen(src), &diags);
 
     ASSERT(has_errors(&diags), "§4.1: missing 'type' section produces error");
+    hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);
 }
 

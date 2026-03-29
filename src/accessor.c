@@ -86,20 +86,20 @@ int hon_get_string(const hon_document *doc,
     hon_type *resolved = val->type ? hon_resolve_alias(val->type) : NULL;
 
     if (val->kind == HON_VAL_STRING) {
-        size_t len = val->u.string.len;
-        if (len >= bufsz) len = bufsz - 1;
-        memcpy(buf, val->u.string.data, len);
-        buf[len] = '\0';
-        return 0;
+        size_t full_len = val->u.string.len;
+        size_t copy_len = full_len < bufsz ? full_len : bufsz - 1;
+        memcpy(buf, val->u.string.data, copy_len);
+        buf[copy_len] = '\0';
+        return full_len >= bufsz ? (int)(full_len + 1) : 0;
     }
 
     /* Also accept enum values as strings for convenience */
     if (val->kind == HON_VAL_ENUM) {
-        size_t len = val->u.enum_val.len;
-        if (len >= bufsz) len = bufsz - 1;
-        memcpy(buf, val->u.enum_val.data, len);
-        buf[len] = '\0';
-        return 0;
+        size_t full_len = val->u.enum_val.len;
+        size_t copy_len = full_len < bufsz ? full_len : bufsz - 1;
+        memcpy(buf, val->u.enum_val.data, copy_len);
+        buf[copy_len] = '\0';
+        return full_len >= bufsz ? (int)(full_len + 1) : 0;
     }
 
     /* Check if the underlying type is String (or alias of String) */
