@@ -945,6 +945,26 @@ static hon_document *parse_document(parser *p) {
     return doc;
 }
 
+/* ---- Diagnostic Detach ---- */
+
+/* Copy diagnostics from arena to malloc so they survive arena_free. */
+static void diag_detach_from_arena(hon_diag_list *diags) {
+    if (!diags || diags->count == 0) return;
+    hon_diagnostic *safe = malloc(sizeof(hon_diagnostic) * diags->count);
+    if (safe) {
+        for (uint32_t di = 0; di < diags->count; di++) {
+            safe[di] = diags->items[di];
+            if (diags->items[di].message)
+                safe[di].message = strdup(diags->items[di].message);
+        }
+        diags->items = safe;
+        diags->owns_memory = true;
+    } else {
+        diags->items = NULL;
+        diags->count = 0;
+    }
+}
+
 /* ---- Public API ---- */
 
 hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
@@ -981,23 +1001,7 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
 
     hon_document *doc = parse_document(&p);
     if (!doc) {
-        /* Copy diagnostics to malloc before freeing the arena,
-         * so callers can still inspect errors after a failed parse. */
-        if (diags && diags->count > 0) {
-            hon_diagnostic *safe = malloc(sizeof(hon_diagnostic) * diags->count);
-            if (safe) {
-                for (uint32_t di = 0; di < diags->count; di++) {
-                    safe[di] = diags->items[di];
-                    if (diags->items[di].message)
-                        safe[di].message = strdup(diags->items[di].message);
-                }
-                diags->items = safe;
-                diags->owns_memory = true;
-            } else {
-                diags->items = NULL;
-                diags->count = 0;
-            }
-        }
+        diag_detach_from_arena(diags);
         hon_arena_free(arena);
         return NULL;
     }
