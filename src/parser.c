@@ -440,6 +440,35 @@ static hon_type *parse_type_definition(parser *p) {
                 } else if (rb_type->kind == HON_TYPE_RECORD) {
                     if (rb_type->u.record.field_count != t->u.record.field_count) {
                         divergent = true;
+                    } else {
+                        for (uint32_t i = 0; i < rb_type->u.record.field_count; i++) {
+                            if (!hon_str_eq(rb_type->u.record.fields[i].name,
+                                            t->u.record.fields[i].name) ||
+                                !hon_str_eq(rb_type->u.record.fields[i].type->name,
+                                            t->u.record.fields[i].type->name)) {
+                                divergent = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!divergent && rb_type->u.record.has_variant != t->u.record.has_variant) {
+                        divergent = true;
+                    }
+                    if (!divergent && rb_type->u.record.has_variant && t->u.record.has_variant) {
+                        if (rb_type->u.record.arm_count != t->u.record.arm_count ||
+                            !hon_str_eq(rb_type->u.record.tag_name, t->u.record.tag_name)) {
+                            divergent = true;
+                        }
+                    }
+                } else if (rb_type->kind == HON_TYPE_SEQUENCE) {
+                    if (!hon_str_eq(rb_type->u.sequence.element_type->name,
+                                    t->u.sequence.element_type->name)) {
+                        divergent = true;
+                    }
+                } else if (rb_type->kind == HON_TYPE_ALIAS) {
+                    if (!hon_str_eq(rb_type->u.alias.target->name,
+                                    t->u.alias.target->name)) {
+                        divergent = true;
                     }
                 }
 

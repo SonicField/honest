@@ -362,6 +362,136 @@ static void test_registry_hash(void) {
     hon_arena_free(arena2);
 }
 
+/*
+ * Test 7: Record divergence — same field count, different field names
+ */
+static void test_record_field_divergence(void) {
+    const char *rb_src =
+        "type\n"
+        "  Point = record\n"
+        "    x : Integer;\n"
+        "    y : Integer;\n"
+        "  end;\n"
+        "var _d : Point = (x : 0; y : 0);\n";
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = load_rulebook_str(arena, rb_src);
+
+    /* Same field count, different field names */
+    const char *doc_src =
+        "type\n"
+        "  Point = record\n"
+        "    name : String;\n"
+        "    age : Integer;\n"
+        "  end;\n"
+        "var p : Point = (name : 'Alice'; age : 30);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
+
+    ASSERT(doc != NULL, "T7: parse succeeds");
+    ASSERT(!has_errors(&diags), "T7: zero errors");
+    ASSERT(has_info(&diags), "T7: divergence detected (different field names)");
+
+    hon_doc_free(doc);
+    hon_arena_free(arena);
+}
+
+/*
+ * Test 8: Record divergence — same field names, different field types
+ */
+static void test_record_type_divergence(void) {
+    const char *rb_src =
+        "type\n"
+        "  Pair = record\n"
+        "    a : Integer;\n"
+        "    b : Integer;\n"
+        "  end;\n"
+        "var _d : Pair = (a : 0; b : 0);\n";
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = load_rulebook_str(arena, rb_src);
+
+    /* Same field names, different types */
+    const char *doc_src =
+        "type\n"
+        "  Pair = record\n"
+        "    a : String;\n"
+        "    b : String;\n"
+        "  end;\n"
+        "var p : Pair = (a : 'x'; b : 'y');\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
+
+    ASSERT(doc != NULL, "T8: parse succeeds");
+    ASSERT(!has_errors(&diags), "T8: zero errors");
+    ASSERT(has_info(&diags), "T8: divergence detected (different field types)");
+
+    hon_doc_free(doc);
+    hon_arena_free(arena);
+}
+
+/*
+ * Test 9: Sequence divergence — different element type
+ */
+static void test_sequence_divergence(void) {
+    const char *rb_src =
+        "type\n"
+        "  Items = sequence of Integer;\n"
+        "var _d : Items = (1);\n";
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = load_rulebook_str(arena, rb_src);
+
+    const char *doc_src =
+        "type\n"
+        "  Items = sequence of String;\n"
+        "var i : Items = ('hello');\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
+
+    ASSERT(doc != NULL, "T9: parse succeeds");
+    ASSERT(!has_errors(&diags), "T9: zero errors");
+    ASSERT(has_info(&diags), "T9: divergence detected (different element type)");
+
+    hon_doc_free(doc);
+    hon_arena_free(arena);
+}
+
+/*
+ * Test 10: Alias divergence — different target
+ */
+static void test_alias_divergence(void) {
+    const char *rb_src =
+        "type\n"
+        "  Name = String;\n"
+        "var _d : Name = 'x';\n";
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = load_rulebook_str(arena, rb_src);
+
+    const char *doc_src =
+        "type\n"
+        "  Name = LongInt;\n"
+        "var n : Name = 42;\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse_with_registry(doc_src, strlen(doc_src),
+                                                 reg, &diags);
+
+    ASSERT(doc != NULL, "T10: parse succeeds");
+    ASSERT(!has_errors(&diags), "T10: zero errors");
+    ASSERT(has_info(&diags), "T10: divergence detected (different alias target)");
+
+    hon_doc_free(doc);
+    hon_arena_free(arena);
+}
+
 int main(void) {
     test_unknown_enum();
     test_unknown_record();
@@ -369,6 +499,10 @@ int main(void) {
     test_matching_type();
     test_mixed();
     test_registry_hash();
+    test_record_field_divergence();
+    test_record_type_divergence();
+    test_sequence_divergence();
+    test_alias_divergence();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
