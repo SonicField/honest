@@ -171,6 +171,9 @@ class Lexer:
                         result.append("\\" + esc)
                 else:
                     result.append("\\")
+            elif ord(ch) < 0x20 and ch != '\t':
+                return Token(TokenKind.ERROR,
+                             f"control character U+{ord(ch):04X} in string", line, col)
             else:
                 result.append(ch)
         return Token(TokenKind.ERROR, "unterminated string", line, col)

@@ -221,6 +221,16 @@ def test_missing_type_keyword():
         honest.parse("var x : Integer = 1;\n")
 
 
+def test_control_char_in_string_rejected():
+    with pytest.raises(honest.ParseError):
+        honest.parse("type\n  S = String;\nvar s : S = 'hello\x01world';\n")
+
+
+def test_control_char_outside_string_rejected():
+    with pytest.raises(honest.ParseError):
+        honest.parse("type\n  S = String;\n\x02var s : S = 'hello';\n")
+
+
 # ---- Round-Trip ----
 
 def test_roundtrip_simple():

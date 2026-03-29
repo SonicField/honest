@@ -34,13 +34,18 @@ class Parser:
             self._types[name] = t
 
     def _next(self) -> Token:
-        return self._lex.next_skip_comments()
+        t = self._lex.next_skip_comments()
+        if t.kind == TokenKind.ERROR:
+            raise ParseError(t.text, t.line, t.col)
+        return t
 
     def _peek(self) -> Token:
         t = self._lex.peek()
         while t.kind == TokenKind.COMMENT:
             self._lex.next()
             t = self._lex.peek()
+        if t.kind == TokenKind.ERROR:
+            raise ParseError(t.text, t.line, t.col)
         return t
 
     def _expect(self, kind: TokenKind, context: str = "") -> Token:
