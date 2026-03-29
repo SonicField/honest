@@ -129,8 +129,24 @@ class HonValue:
     # Sequence
     elements: Optional[list[HonValue]] = None
 
-    def __getitem__(self, key):
-        """Dict-style access for record fields."""
+    def unwrap(self):
+        """Return native Python value for leaves, self for compounds."""
+        if self.kind == ValueKind.BOOL:
+            return self.boolean
+        if self.kind == ValueKind.INT:
+            return self.integer
+        if self.kind == ValueKind.REAL:
+            return self.real
+        if self.kind == ValueKind.CHAR:
+            return chr(self.character) if self.character is not None else None
+        if self.kind == ValueKind.STRING:
+            return self.string
+        if self.kind == ValueKind.ENUM:
+            return self.enum_val
+        return self  # records and sequences stay wrapped
+
+    def _lookup(self, key):
+        """Find a child value by key (field name or sequence index)."""
         if self.kind == ValueKind.RECORD and self.fields:
             for fv in self.fields:
                 if fv.name == key:
@@ -142,13 +158,20 @@ class HonValue:
         if self.kind == ValueKind.SEQUENCE and self.elements:
             if isinstance(key, int):
                 return self.elements[key]
-        raise KeyError(key)
+        return None
+
+    def __getitem__(self, key):
+        """Dict-style access with auto-unwrapping of leaf values."""
+        val = self._lookup(key)
+        if val is None:
+            raise KeyError(key)
+        return val.unwrap()
 
     def get(self, key, default=None):
-        try:
-            return self[key]
-        except KeyError:
+        val = self._lookup(key)
+        if val is None:
             return default
+        return val.unwrap()
 
 
 # ---- Variable ----
@@ -168,17 +191,17 @@ class Document:
     vars: list[Variable] = field(default_factory=list)
 
     def __getitem__(self, key):
-        """Dict-style access for variables."""
+        """Dict-style access for variables with auto-unwrapping."""
         for v in self.vars:
             if v.name == key:
-                return v.value
+                return v.value.unwrap()
         raise KeyError(key)
 
     def get(self, key, default=None):
-        try:
-            return self[key]
-        except KeyError:
-            return default
+        for v in self.vars:
+            if v.name == key:
+                return v.value.unwrap()
+        return default
 
     def get_type(self, name: str) -> Optional[HonType]:
         for t in self.types:

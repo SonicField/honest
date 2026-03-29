@@ -1,6 +1,8 @@
 """Tests for the Python Honest parser.
 
 Uses the same test inputs as the C conformance suite where applicable.
+Values auto-unwrap: leaf types return native Python (str, int, float, bool),
+compound types (records, sequences) return HonValue for further navigation.
 """
 
 import pytest
@@ -26,9 +28,9 @@ var origin : Point = (
     assert len(doc.types) == 1
     assert len(doc.vars) == 1
     assert doc.vars[0].name == "origin"
-    val = doc["origin"]
-    assert val["x"].real == 0.0
-    assert val["label"].string == "Origin"
+    val = doc["origin"]  # record → stays wrapped
+    assert val["x"] == 0.0
+    assert val["label"] == "Origin"
 
 
 def test_enum():
@@ -37,7 +39,7 @@ type
   Color = (Red, Green, Blue);
 var c : Color = Red;
 """)
-    assert doc["c"].enum_val == "Red"
+    assert doc["c"] == "Red"
 
 
 def test_alias():
@@ -46,7 +48,7 @@ type
   Uri = String;
 var link : Uri = 'https://example.com';
 """)
-    assert doc["link"].string == "https://example.com"
+    assert doc["link"] == "https://example.com"
 
 
 def test_sequence():
@@ -55,10 +57,10 @@ type
   Numbers = sequence of Integer;
 var nums : Numbers = (1; 2; 3);
 """)
-    seq = doc["nums"]
+    seq = doc["nums"]  # sequence → stays wrapped
     assert len(seq.elements) == 3
-    assert seq[0].integer == 1
-    assert seq[2].integer == 3
+    assert seq[0] == 1
+    assert seq[2] == 3
 
 
 def test_nested_record():
@@ -76,8 +78,8 @@ var obj : Outer = (
   data : (x : 42);
 );
 """)
-    assert doc["obj"]["name"].string == "test"
-    assert doc["obj"]["data"]["x"].integer == 42
+    assert doc["obj"]["name"] == "test"
+    assert doc["obj"]["data"]["x"] == 42
 
 
 def test_variant_record():
@@ -105,8 +107,8 @@ type
   end;
 var f : Flags = (active : True; hidden : False);
 """)
-    assert doc["f"]["active"].boolean is True
-    assert doc["f"]["hidden"].boolean is False
+    assert doc["f"]["active"] is True
+    assert doc["f"]["hidden"] is False
 
 
 def test_string_escapes():
@@ -115,8 +117,9 @@ type
   S = String;
 var s : S = 'it''s a \"test\"\n';
 """)
-    val = doc["s"].string
+    val = doc["s"]
     assert "'" in val
+    assert isinstance(val, str)
 
 
 def test_negative_integer():
@@ -125,7 +128,7 @@ type
   N = Integer;
 var n : N = -42;
 """)
-    assert doc["n"].integer == -42
+    assert doc["n"] == -42
 
 
 def test_real_with_exponent():
@@ -134,7 +137,7 @@ type
   R = Real;
 var r : R = 1.5e10;
 """)
-    assert doc["r"].real == 1.5e10
+    assert doc["r"] == 1.5e10
 
 
 def test_declarations_only():
@@ -152,8 +155,8 @@ var b : N = 2;
 var c : N = 3;
 """)
     assert len(doc.vars) == 3
-    assert doc["a"].integer == 1
-    assert doc["c"].integer == 3
+    assert doc["a"] == 1
+    assert doc["c"] == 3
 
 
 def test_sequence_of_records():
@@ -171,8 +174,8 @@ var items : Items = (
 """)
     seq = doc["items"]
     assert len(seq.elements) == 2
-    assert seq[0]["name"].string == "widget"
-    assert seq[1]["qty"].integer == 3
+    assert seq[0]["name"] == "widget"
+    assert seq[1]["qty"] == 3
 
 
 # ---- Error Cases ----
@@ -237,8 +240,8 @@ var item : Info = (
     doc2 = honest.parse(output)
     assert len(doc2.types) == len(doc.types)
     assert len(doc2.vars) == len(doc.vars)
-    assert doc2["item"]["name"].string == "test"
-    assert doc2["item"]["color"].enum_val == "Blue"
+    assert doc2["item"]["name"] == "test"
+    assert doc2["item"]["color"] == "Blue"
 
 
 def test_roundtrip_wire():
@@ -249,7 +252,7 @@ var n : N = 42;
     doc = honest.parse(src)
     wire = honest.serialise(doc, wire=True)
     doc2 = honest.parse(wire)
-    assert doc2["n"].integer == 42
+    assert doc2["n"] == 42
 
 
 # ---- File Parsing ----
@@ -258,14 +261,14 @@ def test_parse_file(tmp_path):
     p = tmp_path / "test.honest"
     p.write_text("type\n  X = Integer;\nvar x : X = 99;\n")
     doc = honest.parse_file(str(p))
-    assert doc["x"].integer == 99
+    assert doc["x"] == 99
 
 
 # ---- Document Access ----
 
 def test_document_get():
     doc = honest.parse("type\n  N = Integer;\nvar x : N = 1;\n")
-    assert doc.get("x") is not None
+    assert doc.get("x") == 1
     assert doc.get("nonexistent") is None
 
 
@@ -279,8 +282,56 @@ type
 var r : R = (a : 1; b : 'hello');
 """)
     val = doc["r"]
-    assert val.get("a").integer == 1
+    assert val.get("a") == 1
     assert val.get("missing") is None
+
+
+# ---- Auto-Unwrap ----
+
+def test_unwrap_leaf_types():
+    """Leaf values auto-unwrap to native Python types."""
+    doc = honest.parse("""
+type
+  R = record
+    s : String;
+    i : Integer;
+    r : Real;
+    b : Boolean;
+    c : Char;
+  end;
+  Color = (Red, Green, Blue);
+var rec : R = (s : 'hello'; i : 42; r : 3.14; b : True; c : 'X');
+var col : Color = Green;
+""")
+    rec = doc["rec"]
+    assert rec["s"] == "hello"
+    assert isinstance(rec["s"], str)
+    assert rec["i"] == 42
+    assert isinstance(rec["i"], int)
+    assert abs(rec["r"] - 3.14) < 0.001
+    assert isinstance(rec["r"], float)
+    assert rec["b"] is True
+    assert isinstance(rec["b"], bool)
+    assert rec["c"] == "X"
+    assert doc["col"] == "Green"
+    assert isinstance(doc["col"], str)
+
+
+def test_unwrap_nested_navigation():
+    """Records and sequences stay wrapped for chained navigation."""
+    doc = honest.parse("""
+type
+  Inner = record
+    value : String;
+  end;
+  Outer = record
+    title : String;
+    data : Inner;
+  end;
+var obj : Outer = (title : 'test'; data : (value : 'deep'));
+""")
+    assert doc["obj"]["title"] == "test"
+    assert doc["obj"]["data"]["value"] == "deep"
 
 
 # ---- Extract ----
@@ -304,8 +355,8 @@ var result : Result = (
 The test passes because...
 """
     doc = honest.extract(text)
-    assert doc["result"]["verdict"].enum_val == "Pass"
-    assert doc["result"]["reasoning"].string == "All criteria met"
+    assert doc["result"]["verdict"] == "Pass"
+    assert doc["result"]["reasoning"] == "All criteria met"
 
 
 def test_extract_from_plain_text():
@@ -325,7 +376,7 @@ var result : EvalResult = (
 That is my assessment.
 """
     doc = honest.extract(text)
-    assert doc["result"]["verdict"].enum_val == "Fail"
+    assert doc["result"]["verdict"] == "Fail"
 
 
 def test_extract_no_document():
@@ -340,4 +391,4 @@ type
 var n : N = 42;
 ```"""
     doc = honest.extract(text)
-    assert doc["n"].integer == 42
+    assert doc["n"] == 42
