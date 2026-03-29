@@ -95,7 +95,7 @@ static const hon_value *navigate_path(const hon_value *val, const char *field_pa
 static char *read_stdin(size_t *out_len) {
     size_t cap = 4096, len = 0;
     char *buf = malloc(cap);
-    if (!buf) return NULL;
+    if (!buf) { fprintf(stderr, "Out of memory\n"); return NULL; }
 
     size_t n;
     while ((n = fread(buf + len, 1, cap - len, stdin)) > 0) {
@@ -103,7 +103,7 @@ static char *read_stdin(size_t *out_len) {
         if (len == cap) {
             cap *= 2;
             char *tmp = realloc(buf, cap);
-            if (!tmp) { free(buf); return NULL; }
+            if (!tmp) { fprintf(stderr, "Out of memory\n"); free(buf); return NULL; }
             buf = tmp;
         }
     }

@@ -5,7 +5,7 @@ Mirrors the C implementation's type/value model using Python dataclasses.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dc_fields
 from enum import Enum, auto
 from typing import Optional
 
@@ -81,11 +81,16 @@ class HonType:
     # ALIAS
     target: Optional[HonType] = None
 
-    def resolve(self) -> HonType:
-        """Follow alias chain to the underlying type."""
+    def resolve(self, max_depth: int = 256) -> HonType:
+        """Follow alias chain to the underlying type.
+        Depth-limited to prevent infinite loops on cyclic aliases."""
         t = self
+        depth = 0
         while t.kind == TypeKind.ALIAS and t.target is not None:
             t = t.target
+            depth += 1
+            if depth > max_depth:
+                raise ValueError("alias chain exceeds maximum depth — possible cycle")
         return t
 
 
@@ -173,14 +178,9 @@ class HonValue:
             return default
         return val.unwrap()
 
-    _OWN_ATTRS = frozenset({
-        "kind", "type", "boolean", "integer", "real", "character",
-        "string", "enum_val", "fields", "tag_value", "variant_fields",
-        "elements", "unwrap", "get",
-    })
-
     def __getattr__(self, name):
-        if name.startswith("_") or name in self._OWN_ATTRS:
+        # Guard against recursion: dataclass fields and methods are not record lookups
+        if name.startswith("_") or name in {f.name for f in dc_fields(HonValue)} | {"unwrap", "get"}:
             raise AttributeError(name)
         try:
             return self[name]

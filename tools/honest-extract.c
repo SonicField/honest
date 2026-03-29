@@ -30,6 +30,7 @@ static char *read_all(FILE *f, size_t *out_len) {
             buf = tmp;
         }
     }
+    if (ferror(f)) { free(buf); return NULL; }
     *out_len = len;
     return buf;
 }

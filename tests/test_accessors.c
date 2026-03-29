@@ -362,6 +362,224 @@ static void test_get_multiple_vars(void) {
     hon_doc_free(doc);
 }
 
+/* ================================================================
+ * hon_get_bool tests
+ *
+ * Contract: returns 0 on success, -1 not found, -2 type mismatch.
+ * Writes true/false to *out.
+ * ================================================================ */
+
+static void test_get_bool_true(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    flag : Boolean;\n"
+        "  end;\n"
+        "var r : R = (flag : True);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_bool true: parse succeeds");
+
+    bool val = false;
+    int rc = hon_get_bool(doc, "r", "flag", &val);
+    ASSERT(rc == 0, "get_bool true: returns 0");
+    ASSERT(val == true, "get_bool true: value is true");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_bool_false(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    flag : Boolean;\n"
+        "  end;\n"
+        "var r : R = (flag : False);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_bool false: parse succeeds");
+
+    bool val = true;
+    int rc = hon_get_bool(doc, "r", "flag", &val);
+    ASSERT(rc == 0, "get_bool false: returns 0");
+    ASSERT(val == false, "get_bool false: value is false");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_bool_missing(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    flag : Boolean;\n"
+        "  end;\n"
+        "var r : R = (flag : True);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_bool missing: parse succeeds");
+
+    bool val = false;
+    int rc = hon_get_bool(doc, "r", "nonexistent", &val);
+    ASSERT(rc == -1, "get_bool missing: returns -1");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_bool_type_mismatch(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    n : Integer;\n"
+        "  end;\n"
+        "var r : R = (n : 42);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_bool mismatch: parse succeeds");
+
+    bool val = false;
+    int rc = hon_get_bool(doc, "r", "n", &val);
+    ASSERT(rc == -2, "get_bool mismatch: returns -2 for integer field");
+
+    hon_doc_free(doc);
+}
+
+/* ================================================================
+ * hon_get_real tests
+ *
+ * Contract: returns 0 on success, -1 not found, -2 type mismatch.
+ * Writes double to *out.
+ * ================================================================ */
+
+static void test_get_real_positive(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    x : Real;\n"
+        "  end;\n"
+        "var r : R = (x : 3.14);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_real positive: parse succeeds");
+
+    double val = 0.0;
+    int rc = hon_get_real(doc, "r", "x", &val);
+    ASSERT(rc == 0, "get_real positive: returns 0");
+    /* Compare with tolerance for floating-point */
+    ASSERT(val > 3.13 && val < 3.15, "get_real positive: value is ~3.14");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_real_negative(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    x : Real;\n"
+        "  end;\n"
+        "var r : R = (x : -0.5);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_real negative: parse succeeds");
+
+    double val = 0.0;
+    int rc = hon_get_real(doc, "r", "x", &val);
+    ASSERT(rc == 0, "get_real negative: returns 0");
+    ASSERT(val > -0.51 && val < -0.49, "get_real negative: value is ~-0.5");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_real_zero(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    x : Real;\n"
+        "  end;\n"
+        "var r : R = (x : 0.0);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_real zero: parse succeeds");
+
+    double val = 1.0;
+    int rc = hon_get_real(doc, "r", "x", &val);
+    ASSERT(rc == 0, "get_real zero: returns 0");
+    ASSERT(val == 0.0, "get_real zero: value is 0.0");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_real_type_mismatch(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    s : String;\n"
+        "  end;\n"
+        "var r : R = (s : 'hello');\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_real mismatch: parse succeeds");
+
+    double val = 0.0;
+    int rc = hon_get_real(doc, "r", "s", &val);
+    ASSERT(rc == -2, "get_real mismatch: returns -2 for string field");
+
+    hon_doc_free(doc);
+}
+
+/* ================================================================
+ * hon_get_char tests
+ *
+ * Contract: returns 0 on success, -1 not found, -2 type mismatch.
+ * Writes uint32_t Unicode code point to *out.
+ * ================================================================ */
+
+static void test_get_char_ascii(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    c : Char;\n"
+        "  end;\n"
+        "var r : R = (c : 'A');\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_char ascii: parse succeeds");
+
+    uint32_t val = 0;
+    int rc = hon_get_char(doc, "r", "c", &val);
+    ASSERT(rc == 0, "get_char ascii: returns 0");
+    ASSERT(val == 'A', "get_char ascii: value is 'A' (65)");
+
+    hon_doc_free(doc);
+}
+
+static void test_get_char_type_mismatch(void) {
+    const char *src =
+        "type\n"
+        "  R = record\n"
+        "    n : Integer;\n"
+        "  end;\n"
+        "var r : R = (n : 42);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "get_char mismatch: parse succeeds");
+
+    uint32_t val = 0;
+    int rc = hon_get_char(doc, "r", "n", &val);
+    ASSERT(rc == -2, "get_char mismatch: returns -2 for integer field");
+
+    hon_doc_free(doc);
+}
+
 int main(void) {
     /* Top-level scalar access */
     test_get_string_top_level_empty_path();
@@ -394,6 +612,22 @@ int main(void) {
 
     /* Multiple variables */
     test_get_multiple_vars();
+
+    /* hon_get_bool */
+    test_get_bool_true();
+    test_get_bool_false();
+    test_get_bool_missing();
+    test_get_bool_type_mismatch();
+
+    /* hon_get_real */
+    test_get_real_positive();
+    test_get_real_negative();
+    test_get_real_zero();
+    test_get_real_type_mismatch();
+
+    /* hon_get_char */
+    test_get_char_ascii();
+    test_get_char_type_mismatch();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

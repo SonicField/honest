@@ -150,11 +150,6 @@ def _serialise_value(v: HonValue, parts: list[str], indent: int):
         parts.append(v.enum_val)
     elif v.kind == ValueKind.RECORD:
         parts.append("(\n")
-        all_fields = list(v.fields or [])
-        if v.tag_value:
-            resolved = v.type.resolve() if v.type else None
-            tag_name = resolved.tag_name if resolved else "tag"
-            all_fields.append(type("FV", (), {"name": tag_name, "value": type("V", (), {"kind": "tag", "tag_value": v.tag_value})()})())
         for i, fv in enumerate(v.fields or []):
             if i > 0:
                 parts.append(";\n")

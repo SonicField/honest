@@ -43,6 +43,9 @@ static char *read_stdin(size_t *out_len) {
             if (!buf) return NULL;
         }
     }
+    /* Safe: len < cap is guaranteed here. The loop exits when fread returns 0,
+     * at which point either len < cap (didn't fill buffer) or len == old_cap
+     * and realloc doubled cap, so buf has room at index len. */
     buf[len] = '\0';
     *out_len = len;
     return buf;

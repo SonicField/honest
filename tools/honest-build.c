@@ -257,7 +257,11 @@ static hon_value *build_record_value(hon_arena *a, hon_type *type,
 
         v->u.record.fields[fi].name = fname;
 
-        /* Collect assignments for this field */
+        /* Collect assignments for this field.
+         * Note: sub_assigns is stack-allocated in a recursive call chain.
+         * MAX_PATH_DEPTH (32) bounds recursion depth, so worst-case stack
+         * usage is 32 * sizeof(assignment) * MAX_ASSIGNMENTS = ~256KB,
+         * well within typical stack limits. */
         assignment sub_assigns[MAX_ASSIGNMENTS];
         int nsub = 0;
         for (int ai = 0; ai < nassign; ai++) {
@@ -327,6 +331,7 @@ static hon_value *build_sequence_value(hon_arena *a, hon_type *type,
         snprintf(idx_str, sizeof(idx_str), "%u", ei);
         size_t idx_len = strlen(idx_str);
 
+        /* Stack-allocated; bounded by MAX_PATH_DEPTH recursion limit. */
         assignment sub_assigns[MAX_ASSIGNMENTS];
         int nsub = 0;
         for (int ai = 0; ai < nassign; ai++) {
