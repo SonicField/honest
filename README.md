@@ -40,14 +40,14 @@ Read it top to bottom. The declarations tell you what the types mean. The data u
 
 ## Documentation
 
-- **[Format Specification](specs/honest-spec.md)** — the formal language specification with complete EBNF grammar
+See the **[full documentation index](docs/index.md)** for all guides and references.
+
+Key entry points:
+
 - **[User Guide](docs/user-guide.md)** — tutorial introduction to reading and writing Honest documents
-- **[Implementor's Guide](docs/implementors-guide.md)** — how to build a conformant parser
 - **[CLI Reference](docs/cli-reference.md)** — all 5 command-line tools with options, exit codes, and examples
 - **[Python Library](docs/python-library.md)** — API reference, auto-unwrapping, extract, and examples
-- **[Testing Guide](docs/testing.md)** — how to run and extend the test suites
-- **[Examples](examples/)** — annotated Honest documents covering all features
-- **[NBS Standard Types](lib/nbs-standard.honest-rulebook)** — the canonical NBS type library
+- **[Format Specification](specs/honest-spec.md)** — the formal language specification with complete EBNF grammar
 
 ## Building
 
