@@ -1044,21 +1044,7 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
 
     hon_document *doc = parse_document(&p);
     if (!doc) {
-        if (diags && diags->count > 0) {
-            hon_diagnostic *safe = malloc(sizeof(hon_diagnostic) * diags->count);
-            if (safe) {
-                for (uint32_t di = 0; di < diags->count; di++) {
-                    safe[di] = diags->items[di];
-                    if (diags->items[di].message)
-                        safe[di].message = strdup(diags->items[di].message);
-                }
-                diags->items = safe;
-                diags->owns_memory = true;
-            } else {
-                diags->items = NULL;
-                diags->count = 0;
-            }
-        }
+        diag_detach_from_arena(diags);
         hon_arena_free(arena);
         return NULL;
     }

@@ -92,6 +92,9 @@ static hon_token lex_brace_comment(hon_lexer *lex) {
     }
     if (!at_end(lex)) {
         advance(lex); /* skip } */
+    } else {
+        size_t len = (size_t)(lex->src + lex->pos - start);
+        return make_token(HON_TOK_ERROR, start, len, start_line, start_col);
     }
 
     size_t len = (size_t)(lex->src + lex->pos - start);
@@ -106,17 +109,20 @@ static hon_token lex_paren_star_comment(hon_lexer *lex) {
     advance(lex); /* skip ( */
     advance(lex); /* skip * */
 
+    bool terminated = false;
     while (!at_end(lex)) {
         if (peek_char(lex) == '*' && peek_char_at(lex, 1) == ')') {
             advance(lex); /* skip * */
             advance(lex); /* skip ) */
+            terminated = true;
             break;
         }
         advance(lex);
     }
 
     size_t len = (size_t)(lex->src + lex->pos - start);
-    return make_token(HON_TOK_COMMENT, start, len, start_line, start_col);
+    return make_token(terminated ? HON_TOK_COMMENT : HON_TOK_ERROR,
+                      start, len, start_line, start_col);
 }
 
 static hon_token lex_string(hon_lexer *lex) {
@@ -126,6 +132,7 @@ static hon_token lex_string(hon_lexer *lex) {
 
     advance(lex); /* skip opening ' */
 
+    bool terminated = false;
     while (!at_end(lex)) {
         char c = peek_char(lex);
         if (c == '\'') {
@@ -135,6 +142,7 @@ static hon_token lex_string(hon_lexer *lex) {
                 continue;
             }
             advance(lex); /* closing ' */
+            terminated = true;
             break;
         }
         if (c == '\\') {
@@ -146,7 +154,8 @@ static hon_token lex_string(hon_lexer *lex) {
     }
 
     size_t len = (size_t)(lex->src + lex->pos - start);
-    return make_token(HON_TOK_STRING, start, len, start_line, start_col);
+    return make_token(terminated ? HON_TOK_STRING : HON_TOK_ERROR,
+                      start, len, start_line, start_col);
 }
 
 static hon_token lex_number(hon_lexer *lex) {
