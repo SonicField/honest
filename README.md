@@ -36,7 +36,7 @@ Read it top to bottom. The declarations tell you what the types mean. The data u
 | Self-describing | Shape only | No (needs .proto) | Full types in every document |
 | Discriminated unions | No | Oneof (limited) | Variant records (first-class) |
 | Semantic types | No | No | Enumerations, type aliases |
-| Unknown fields | Ignored or dropped | Preserved as bytes | Parsed, understood, extended |
+| Unknown fields | Ignored or dropped | Parsed, understood, extended |
 
 ## Documentation
 
@@ -53,6 +53,7 @@ Honest includes a C reference implementation: `libhonest` (a library) and a set 
 ```bash
 make            # build libhonest and CLI tools
 make check      # run the test suite
+make check-asan # run tests under AddressSanitizer
 ```
 
 ### C Library
@@ -67,10 +68,18 @@ if (diags.count > 0) {
     /* handle warnings/errors */
 }
 
+/* Extract a field value */
+char buf[256];
+hon_get_string(doc, "result", "name", buf, sizeof(buf));
+
+long score;
+hon_get_long(doc, "result", "score", &score);
+
 /* Serialise back */
 char *output = hon_serialise(doc, HON_MODE_DOCUMENT, NULL);
 
 /* Clean up */
+hon_diag_free(&diags);
 hon_doc_free(doc);
 ```
 
@@ -80,15 +89,29 @@ hon_doc_free(doc);
 # Parse and validate a document
 honest-parse message.honest
 
-# Parse with verbose inspection
-honest-parse -v message.honest
+# Parse from stdin
+cat message.honest | honest-parse -
 
 # Reformat a document (pretty-print or wire mode)
 honest-fmt message.honest
 honest-fmt -w message.honest
 
-# Extract a value by name and field path
-honest-get message.honest msg payload.content
+# Extract field values (raw output, one per line)
+honest-get message.honest result verdict reasoning
+honest-get - result verdict < message.honest
+
+# Build a document from shell variables
+honest-build --type SessionMeta --rulebook types.honest \
+  session_id="$UUID" handle="$HANDLE" pid=$$
+
+# Build with inline type definition and nested records
+honest-build --type Report \
+  --typedef "type Report = record title : String; score : Integer; end;" \
+  title="My Report" score=42
+
+# Extract Honest document from mixed text (e.g. AI output)
+honest-extract ai-response.txt
+echo "$AI_OUTPUT" | honest-extract -
 ```
 
 ## Project Structure
@@ -111,7 +134,8 @@ honest/
     04-sequences.honest         # Ordered collections
     05-nbs-agent-message.honest # Full NBS agent message
   src/                          # C reference implementation
-  tools/                        # CLI tools (honest-parse, honest-fmt, honest-get)
+  tools/                        # CLI tools (honest-parse, honest-fmt, honest-get,
+                                #            honest-build, honest-extract)
   tests/                        # Test suite
 ```
 
@@ -136,7 +160,7 @@ The format specification and C reference implementation are complete.
 | Examples | Complete |
 | C library (libhonest) | Complete |
 | CLI tools | Complete |
-| Test suite (224 tests) | Complete |
+| Test suite (588 tests) | Complete |
 
 ## License
 
