@@ -75,7 +75,7 @@ def extract(text: str) -> Document:
     for candidate in candidates:
         try:
             return Parser(candidate).parse()
-        except (ParseError, Exception):
+        except ParseError:
             continue
 
     raise ValueError("No valid Honest document found")

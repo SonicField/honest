@@ -263,6 +263,10 @@ class Lexer:
         if ch.isalpha():
             return self._read_ident(line, col)
 
+        # Reject control characters
+        if ord(ch) < 0x20 and ch not in "\t\n\r":
+            return Token(TokenKind.ERROR, f"control character U+{ord(ch):04X}", line, col)
+
         return Token(TokenKind.ERROR, ch, line, col)
 
     def next(self) -> Token:
