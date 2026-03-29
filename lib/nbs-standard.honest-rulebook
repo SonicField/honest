@@ -65,3 +65,42 @@ type
   { Collections }
   MessageBatch = sequence of Message;
   Claims       = sequence of Claim;
+
+  { Session metadata — written by nbs-claude, read by worker.c }
+  SessionMeta = record
+    session_id    : String;
+    handle        : String;
+    model         : String;
+    nbs_ts_handle : String;
+    project_root  : String;
+    pid           : LongInt;
+    started       : String;
+  end;
+
+  { Test verdicts — used by NBS evaluators }
+  Verdict = (Pass, Fail, Unknown);
+
+  EvalResult = record
+    verdict   : Verdict;
+    reasoning : String;
+  end;
+
+  MentionVerdict = record
+    verdict              : Verdict;
+    worker_a_on_topic    : Boolean;
+    worker_b_contextual  : Boolean;
+    different_handles    : Boolean;
+    reasoning            : String;
+  end;
+
+  { Helper protocol — nbs-ts-helper request/response }
+  HelperRequest = record
+    command : String;
+    cols    : Integer;
+    rows    : Integer;
+    name    : String;
+  end;
+
+  HelperResponse = record
+    child_pid : LongInt;
+  end;
