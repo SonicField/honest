@@ -5,6 +5,8 @@ Parses declarations then data, using type context to disambiguate values.
 
 from __future__ import annotations
 
+import math
+
 from .lexer import Lexer, Token, TokenKind
 from .types import (
     Document, Field, FieldValue, HonType, HonValue, Primitive,
@@ -12,6 +14,13 @@ from .types import (
 )
 
 MAX_DEPTH = 64
+
+INTEGER_RANGES = {
+    Primitive.BYTE: (0, 255),
+    Primitive.WORD: (0, 65535),
+    Primitive.INTEGER: (-2147483648, 2147483647),
+    Primitive.LONGINT: (-9223372036854775808, 9223372036854775807),
+}
 
 
 class ParseError(Exception):
@@ -235,14 +244,26 @@ class Parser:
         if prim in (Primitive.BYTE, Primitive.WORD, Primitive.INTEGER, Primitive.LONGINT):
             if t.kind != TokenKind.INT:
                 raise self._error(f"expected integer, got {t.kind.name}", t)
-            return HonValue(kind=ValueKind.INT, type=typ, integer=int(t.text))
+            try:
+                value = int(t.text)
+            except ValueError as exc:
+                raise self._error("invalid integer literal", t) from exc
+            minimum, maximum = INTEGER_RANGES[prim]
+            if value < minimum or value > maximum:
+                raise self._error(
+                    f"value {value} out of range for {resolved.name}", t)
+            return HonValue(kind=ValueKind.INT, type=typ, integer=value)
 
         if prim == Primitive.REAL:
-            if t.kind == TokenKind.REAL:
-                return HonValue(kind=ValueKind.REAL, type=typ, real=float(t.text))
-            if t.kind == TokenKind.INT:
-                return HonValue(kind=ValueKind.REAL, type=typ, real=float(t.text))
-            raise self._error(f"expected number, got {t.kind.name}", t)
+            if t.kind not in (TokenKind.REAL, TokenKind.INT):
+                raise self._error(f"expected number, got {t.kind.name}", t)
+            try:
+                value = float(t.text)
+            except (ValueError, OverflowError) as exc:
+                raise self._error("invalid real literal", t) from exc
+            if not math.isfinite(value):
+                raise self._error("real literal is out of range", t)
+            return HonValue(kind=ValueKind.REAL, type=typ, real=value)
 
         if prim == Primitive.CHAR:
             if t.kind != TokenKind.STRING:
@@ -379,6 +400,10 @@ class Parser:
             if self._peek().kind == TokenKind.SEMICOLON:
                 self._next()
 
+        if not self._type_list:
+            raise self._error(
+                "declarations section requires at least one type", self._peek())
+
         # Data section (optional)
         variables = []
         while self._peek().kind == TokenKind.VAR:
@@ -396,8 +421,7 @@ class Parser:
 
             variables.append(Variable(name=var_name_tok.text, type=var_type, value=val))
 
-            if self._peek().kind == TokenKind.SEMICOLON:
-                self._next()
+            self._expect(TokenKind.SEMICOLON, "variable")
 
         return Document(types=list(self._type_list), vars=variables)
 

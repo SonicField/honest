@@ -55,6 +55,14 @@ KEYWORDS = {
 }
 
 
+def _is_ascii_letter(ch: str) -> bool:
+    return "A" <= ch <= "Z" or "a" <= ch <= "z"
+
+
+def _is_ascii_digit(ch: str) -> bool:
+    return "0" <= ch <= "9"
+
+
 @dataclass
 class Token:
     kind: TokenKind
@@ -183,15 +191,15 @@ class Lexer:
         start = self._pos - 1  # already consumed first char
         is_real = False
 
-        while self._pos < len(self._src) and self._src[self._pos].isdigit():
+        while self._pos < len(self._src) and _is_ascii_digit(self._src[self._pos]):
             self._advance()
 
         # Decimal point
         if (self._pos < len(self._src) and self._src[self._pos] == "." and
-                self._pos + 1 < len(self._src) and self._src[self._pos + 1].isdigit()):
+                self._pos + 1 < len(self._src) and _is_ascii_digit(self._src[self._pos + 1])):
             is_real = True
             self._advance()  # consume '.'
-            while self._pos < len(self._src) and self._src[self._pos].isdigit():
+            while self._pos < len(self._src) and _is_ascii_digit(self._src[self._pos]):
                 self._advance()
 
         # Exponent
@@ -200,7 +208,10 @@ class Lexer:
             self._advance()
             if self._pos < len(self._src) and self._src[self._pos] in "+-":
                 self._advance()
-            while self._pos < len(self._src) and self._src[self._pos].isdigit():
+            if self._pos >= len(self._src) or not _is_ascii_digit(self._src[self._pos]):
+                text = self._src[start:self._pos]
+                return Token(TokenKind.ERROR, text, line, col)
+            while self._pos < len(self._src) and _is_ascii_digit(self._src[self._pos]):
                 self._advance()
 
         text = self._src[start:self._pos]
@@ -209,7 +220,10 @@ class Lexer:
     def _read_ident(self, line: int, col: int) -> Token:
         """Read an identifier or keyword."""
         start = self._pos - 1
-        while self._pos < len(self._src) and (self._src[self._pos].isalnum() or self._src[self._pos] == "_"):
+        while self._pos < len(self._src) and (
+                _is_ascii_letter(self._src[self._pos]) or
+                _is_ascii_digit(self._src[self._pos]) or
+                self._src[self._pos] == "_"):
             self._advance()
 
         text = self._src[start:self._pos]
@@ -257,13 +271,14 @@ class Lexer:
             return self._read_string(line, col)
 
         # Numbers
-        if ch.isdigit():
+        if _is_ascii_digit(ch):
             return self._read_number(line, col)
-        if ch == "-" and self._pos < len(self._src) and self._src[self._pos].isdigit():
+        if (ch == "-" and self._pos < len(self._src) and
+                _is_ascii_digit(self._src[self._pos])):
             return self._read_number(line, col)
 
         # Identifiers and keywords
-        if ch.isalpha():
+        if _is_ascii_letter(ch):
             return self._read_ident(line, col)
 
         # Reject control characters
