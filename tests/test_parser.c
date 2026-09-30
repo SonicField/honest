@@ -734,6 +734,16 @@ static void test_strict_document_and_rulebook_entry_points(void) {
     hon_diag_free(&diags);
 }
 
+static void test_null_source_is_rejected(void) {
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(NULL, 1, &diags);
+    ASSERT(doc == NULL, "NULL parser source is rejected");
+    ASSERT(has_errors(&diags), "NULL parser source reports an error");
+    hon_diag_free(&diags);
+    ASSERT(hon_parse_document(NULL, 0, NULL) == NULL,
+           "strict parser rejects NULL even for an empty input");
+}
+
 static void test_reserved_boolean_type_rejected(void) {
     const char *src = "type Boolean = (Yes, No);";
     assert_rejected(src, strlen(src),
@@ -844,6 +854,7 @@ int main(void) {
     test_required_semicolons();
     test_trailing_tokens_rejected();
     test_strict_document_and_rulebook_entry_points();
+    test_null_source_is_rejected();
     test_reserved_boolean_type_rejected();
     test_duplicate_variable_name_rejected();
     test_large_declarations_are_not_truncated();

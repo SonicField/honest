@@ -1304,6 +1304,13 @@ static hon_diagnostic invalid_utf8_diagnostic = {
     .message = "input is not valid UTF-8",
 };
 
+static hon_diagnostic invalid_source_diagnostic = {
+    .level = HON_DIAG_ERROR,
+    .line = 0,
+    .col = 0,
+    .message = "input source is NULL",
+};
+
 static void set_invalid_utf8_diagnostic(hon_diag_list *diags) {
     if (!diags) return;
     diags->items = &invalid_utf8_diagnostic;
@@ -1312,8 +1319,21 @@ static void set_invalid_utf8_diagnostic(hon_diag_list *diags) {
     diags->owns_memory = false;
 }
 
+static void set_invalid_source_diagnostic(hon_diag_list *diags) {
+    if (!diags) return;
+    diags->items = &invalid_source_diagnostic;
+    diags->count = 1;
+    diags->cap = 1;
+    diags->owns_memory = false;
+}
+
 hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
     init_primitives();
+
+    if (!src) {
+        set_invalid_source_diagnostic(diags);
+        return NULL;
+    }
 
     hon_arena *arena = hon_arena_new(0);
     if (!arena) return NULL;
@@ -1368,6 +1388,11 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
                                        const hon_registry *reg,
                                        hon_diag_list *diags) {
     init_primitives();
+
+    if (!src) {
+        set_invalid_source_diagnostic(diags);
+        return NULL;
+    }
 
     hon_arena *arena = hon_arena_new(0);
     if (!arena) return NULL;
