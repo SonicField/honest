@@ -66,15 +66,7 @@ jobs:
       - name: Build and test
         run: make test PYTHON="$PWD/.venv/bin/python"
       - name: Verify staged install
-        run: |
-          stage=$(mktemp -d)
-          make install DESTDIR="$stage"
-          for tool in honest-parse honest-fmt honest-get honest-build honest-extract; do
-            test -x "$stage/usr/local/bin/$tool"
-            "$stage/usr/local/bin/$tool" --help >/dev/null
-          done
-          test -f "$stage/usr/local/lib/libhonest.a"
-          test -f "$stage/usr/local/include/honest.h"
+        run: make install-check
 
   sanitizers:
     name: ASan and UBSan / Ubuntu x86-64

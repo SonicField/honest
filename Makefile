@@ -48,7 +48,7 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c,$(BUILDDIR)/test_%,$(TEST_SRCS))
 LIBNAME = libhonest.a
 
 .PHONY: all lib tools tests check python-check conformance test audit \
-	sanitize check-asan check-ubsan check-leak analyze install clean
+	sanitize check-asan check-ubsan check-leak analyze install install-check clean
 
 all: lib tools
 
@@ -120,6 +120,9 @@ install: all
 	$(INSTALL) -m 0755 $(TOOL_BINS) "$(DESTDIR)$(BINDIR)/"
 	$(INSTALL) -m 0644 "$(BUILDDIR)/$(LIBNAME)" "$(DESTDIR)$(LIBDIR)/$(LIBNAME)"
 	$(INSTALL) -m 0644 "$(INCDIR)/honest.h" "$(DESTDIR)$(INCLUDEDIR)/honest.h"
+
+install-check: all
+	bash tests/test_install.sh
 
 clean:
 	rm -rf $(BUILDDIR)
