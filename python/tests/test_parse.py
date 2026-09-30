@@ -448,6 +448,28 @@ var items : Items = (1; 2; 3);
     assert seq2[2] == 3
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "type X = Integer var x : X = 1;",
+        "type R = record x : Integer y : Integer end; "
+        "var r : R = (x : 1; y : 2);",
+        "type R = record x : Integer; y : Integer; end; "
+        "var r : R = (x : 1 y : 2);",
+        "type K = (A, B); R = record case kind : K of "
+        "A : () B : (); end; var r : R = (kind : B);",
+        "type K = (A); R = record case kind : K of "
+        "A : (x : Integer y : Integer); end; "
+        "var r : R = (kind : A; x : 1; y : 2);",
+        "type K = (A); R = record case kind : K of "
+        "A : (x : Integer); end; var r : R = (kind : A x : 1);",
+    ],
+)
+def test_required_semicolons(source):
+    with pytest.raises(honest.ParseError):
+        honest.parse(source)
+
+
 def test_extract_bare_fence():
     text = """```
 type

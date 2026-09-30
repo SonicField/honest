@@ -303,6 +303,10 @@ static uint32_t parse_fields(parser *p, hon_field *fields, uint32_t max_fields,
         peek = peek_skip_comments(p);
         if (peek.kind == HON_TOK_SEMICOLON) {
             next_skip_comments(p); /* consume ';' */
+        } else if (peek.kind == HON_TOK_IDENT) {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                          peek.line, peek.col,
+                          "expected ';' between record fields");
         }
     }
 
@@ -391,9 +395,15 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
 
         expect_skip(p, HON_TOK_RPAREN);
 
-        /* Optional semicolon after arm */
-        if (peek_skip_comments(p).kind == HON_TOK_SEMICOLON)
+        /* Every variant arm ends with a semicolon. */
+        hon_token arm_end = peek_skip_comments(p);
+        if (arm_end.kind == HON_TOK_SEMICOLON) {
             next_skip_comments(p);
+        } else {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                          arm_end.line, arm_end.col,
+                          "expected ';' after variant arm");
+        }
 
         if (arm_count < 64) {
             arms[arm_count].label       = label.text;
@@ -842,10 +852,15 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
 
     for (uint32_t i = 0; i < fixed_count; i++) {
         if (i > 0) {
-            /* Expect semicolon between fields */
+            /* Require a semicolon between fields. */
             hon_token sep = peek_skip_comments(p);
-            if (sep.kind == HON_TOK_SEMICOLON)
+            if (sep.kind == HON_TOK_SEMICOLON) {
                 next_skip_comments(p);
+            } else {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              sep.line, sep.col,
+                              "expected ';' between record values");
+            }
         }
 
         hon_token fname = expect_skip(p, HON_TOK_IDENT);
@@ -878,11 +893,16 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
     val->u.record.variant_field_count = 0;
 
     if (type->u.record.has_variant) {
-        /* Semicolon before tag field */
-        if (fixed_count > 0 || peek_skip_comments(p).kind == HON_TOK_SEMICOLON) {
+        /* A fixed field and the tag field require a separator. */
+        if (fixed_count > 0) {
             hon_token sep = peek_skip_comments(p);
-            if (sep.kind == HON_TOK_SEMICOLON)
+            if (sep.kind == HON_TOK_SEMICOLON) {
                 next_skip_comments(p);
+            } else {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              sep.line, sep.col,
+                              "expected ';' before variant tag");
+            }
         }
 
         /* Parse tag field: name : value */
@@ -941,8 +961,13 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
 
             for (uint32_t i = 0; i < matched_arm->field_count; i++) {
                 hon_token sep = peek_skip_comments(p);
-                if (sep.kind == HON_TOK_SEMICOLON)
+                if (sep.kind == HON_TOK_SEMICOLON) {
                     next_skip_comments(p);
+                } else {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  sep.line, sep.col,
+                                  "expected ';' before variant field");
+                }
 
                 hon_token vfname = expect_skip(p, HON_TOK_IDENT);
                 if (vfname.kind == HON_TOK_ERROR) return NULL;

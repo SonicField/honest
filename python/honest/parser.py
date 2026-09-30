@@ -118,6 +118,8 @@ class Parser:
             p = self._peek()
             if p.kind == TokenKind.SEMICOLON:
                 self._next()
+            elif p.kind == TokenKind.IDENT:
+                raise self._error("expected ';' between record fields", p)
 
         return fields
 
@@ -184,8 +186,7 @@ class Parser:
 
                 arms.append(Variant(label=label_tok.text, fields=arm_fields))
 
-                if self._peek().kind == TokenKind.SEMICOLON:
-                    self._next()
+                self._expect(TokenKind.SEMICOLON, "variant arm")
 
             expected_labels = (
                 set(resolved_tag.values or []) if enum_tag else {"True", "False"}
@@ -334,9 +335,7 @@ class Parser:
         if resolved.fields:
             for i, f in enumerate(resolved.fields):
                 if i > 0:
-                    p = self._peek()
-                    if p.kind == TokenKind.SEMICOLON:
-                        self._next()
+                    self._expect(TokenKind.SEMICOLON, "record value")
 
                 name_tok = self._expect(TokenKind.IDENT, "field name")
                 if name_tok.text != f.name:
@@ -350,9 +349,8 @@ class Parser:
         variant_fields = []
 
         if resolved.has_variant and resolved.tag_name:
-            p = self._peek()
-            if p.kind == TokenKind.SEMICOLON:
-                self._next()
+            if resolved.fields:
+                self._expect(TokenKind.SEMICOLON, "variant tag")
 
             # Read tag field
             tag_name_tok = self._expect(TokenKind.IDENT, "variant tag")
@@ -386,9 +384,7 @@ class Parser:
 
                 if arm and arm.fields:
                     for af in arm.fields:
-                        p = self._peek()
-                        if p.kind == TokenKind.SEMICOLON:
-                            self._next()
+                        self._expect(TokenKind.SEMICOLON, "variant field")
                         fn_tok = self._expect(TokenKind.IDENT, "variant field")
                         if fn_tok.text != af.name:
                             raise self._error(
@@ -449,8 +445,7 @@ class Parser:
 
         while self._peek().kind == TokenKind.IDENT:
             self._parse_type_def()
-            if self._peek().kind == TokenKind.SEMICOLON:
-                self._next()
+            self._expect(TokenKind.SEMICOLON, "type declaration")
 
         if not self._type_list:
             raise self._error(

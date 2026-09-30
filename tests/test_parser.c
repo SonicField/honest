@@ -641,6 +641,27 @@ static void test_declarations_are_required(void) {
                     "declarations section requires at least one declaration");
 }
 
+static void test_required_semicolons(void) {
+    static const char *const malformed[] = {
+        "type R = record x : Integer y : Integer end; "
+        "var r : R = (x : 1; y : 2);",
+        "type R = record x : Integer; y : Integer; end; "
+        "var r : R = (x : 1 y : 2);",
+        "type K = (A, B); R = record case kind : K of "
+        "A : () B : (); end; var r : R = (kind : B);",
+        "type K = (A); R = record case kind : K of "
+        "A : (x : Integer y : Integer); end; "
+        "var r : R = (kind : A; x : 1; y : 2);",
+        "type K = (A); R = record case kind : K of "
+        "A : (x : Integer); end; var r : R = (kind : A x : 1);",
+    };
+
+    for (size_t i = 0; i < sizeof(malformed) / sizeof(malformed[0]); i++) {
+        assert_rejected(malformed[i], strlen(malformed[i]),
+                        "missing required semicolon is rejected");
+    }
+}
+
 int main(void) {
     test_simple_enum();
     test_simple_record();
@@ -668,6 +689,7 @@ int main(void) {
     test_variant_schema_validation();
     test_primitive_rejections();
     test_declarations_are_required();
+    test_required_semicolons();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
