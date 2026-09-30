@@ -523,19 +523,24 @@ def parse_rulebook(src: str) -> Document:
     return document
 
 
+def _read_utf8(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return file.read()
+    except UnicodeDecodeError as exc:
+        raise ParseError("input is not valid UTF-8", 1, 1) from exc
+
+
 def parse_file(path: str) -> Document:
-    """Parse an Honest document from a file."""
-    with open(path, "r", encoding="utf-8") as f:
-        return parse(f.read())
+    """Parse an Honest document or rulebook from a UTF-8 file."""
+    return parse(_read_utf8(path))
 
 
 def parse_document_file(path: str) -> Document:
     """Strictly parse a document file requiring a data section."""
-    with open(path, "r", encoding="utf-8") as f:
-        return parse_document(f.read())
+    return parse_document(_read_utf8(path))
 
 
 def parse_rulebook_file(path: str) -> Document:
     """Strictly parse a declarations-only rulebook file."""
-    with open(path, "r", encoding="utf-8") as f:
-        return parse_rulebook(f.read())
+    return parse_rulebook(_read_utf8(path))

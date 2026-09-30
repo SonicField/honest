@@ -308,6 +308,17 @@ def test_parse_file(tmp_path):
     assert doc["x"] == 99
 
 
+@pytest.mark.parametrize(
+    "loader",
+    [honest.parse_file, honest.parse_document_file, honest.parse_rulebook_file],
+)
+def test_file_parsers_report_invalid_utf8_as_parse_error(tmp_path, loader):
+    path = tmp_path / "invalid.honest"
+    path.write_bytes(b"type N = Integer;\xff")
+    with pytest.raises(honest.ParseError, match="valid UTF-8"):
+        loader(str(path))
+
+
 # ---- Document Access ----
 
 def test_document_get():
