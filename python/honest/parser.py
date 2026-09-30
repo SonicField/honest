@@ -32,8 +32,9 @@ class ParseError(Exception):
 
 
 class Parser:
-    def __init__(self, src: str):
+    def __init__(self, src: str, *, allow_trailing: bool = False):
         self._lex = Lexer(src)
+        self._allow_trailing = allow_trailing
         self._types: dict[str, HonType] = {}
         self._type_list: list[HonType] = []
         self._depth = 0
@@ -469,6 +470,11 @@ class Parser:
             variables.append(Variable(name=var_name_tok.text, type=var_type, value=val))
 
             self._expect(TokenKind.SEMICOLON, "variable")
+
+        if not self._allow_trailing:
+            trailing = self._peek()
+            if trailing.kind != TokenKind.EOF:
+                raise self._error("unexpected tokens after end of document", trailing)
 
         return Document(types=list(self._type_list), vars=variables)
 

@@ -1143,7 +1143,7 @@ static hon_document *parse_document(parser *p) {
     /* Check for trailing tokens */
     hon_token end = peek_skip_comments(p);
     if (end.kind != HON_TOK_EOF) {
-        hon_diag_push(p->diags, p->arena, HON_DIAG_WARNING,
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
                       end.line, end.col,
                       "unexpected tokens after end of document");
     }

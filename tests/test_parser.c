@@ -662,6 +662,13 @@ static void test_required_semicolons(void) {
     }
 }
 
+static void test_trailing_tokens_rejected(void) {
+    const char *src =
+        "type X = Integer; var x : X = 1; trailing";
+    assert_rejected(src, strlen(src),
+                    "tokens after a complete document are rejected");
+}
+
 int main(void) {
     test_simple_enum();
     test_simple_record();
@@ -690,6 +697,7 @@ int main(void) {
     test_primitive_rejections();
     test_declarations_are_required();
     test_required_semicolons();
+    test_trailing_tokens_rejected();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

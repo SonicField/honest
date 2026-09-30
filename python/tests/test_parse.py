@@ -470,6 +470,11 @@ def test_required_semicolons(source):
         honest.parse(source)
 
 
+def test_trailing_tokens_rejected():
+    with pytest.raises(honest.ParseError):
+        honest.parse("type X = Integer; var x : X = 1; trailing")
+
+
 def test_extract_bare_fence():
     text = """```
 type

@@ -74,7 +74,7 @@ def extract(text: str) -> Document:
     # Try each candidate
     for candidate in candidates:
         try:
-            return Parser(candidate).parse()
+            return Parser(candidate, allow_trailing=True).parse()
         except ParseError:
             continue
 

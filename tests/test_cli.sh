@@ -99,6 +99,8 @@ done
 valid="$root/examples/01-simple-record.honest"
 malformed="$tmp_dir/malformed.honest"
 printf '%s\n' 'type X = Integer; var x : X = nope;' >"$malformed"
+trailing="$tmp_dir/trailing.honest"
+printf '%s\n' 'type X = Integer; var x : X = 1; trailing' >"$trailing"
 
 expect_status 1 "fmt rejects a partial parse" \
     "$bin_dir/honest-fmt" "$malformed"
@@ -107,6 +109,14 @@ expect_empty_stdout "fmt emits no malformed document"
 expect_status 1 "extract rejects a partial parse" \
     "$bin_dir/honest-extract" "$malformed"
 expect_empty_stdout "extract emits no malformed document"
+
+expect_status 1 "parse rejects trailing tokens" \
+    "$bin_dir/honest-parse" "$trailing"
+expect_empty_stdout "parse emits no success output for trailing tokens"
+
+expect_status 1 "fmt rejects trailing tokens" \
+    "$bin_dir/honest-fmt" "$trailing"
+expect_empty_stdout "fmt emits no document with trailing tokens"
 
 expect_status 2 "parse rejects multiple input paths" \
     "$bin_dir/honest-parse" "$valid" "$valid"

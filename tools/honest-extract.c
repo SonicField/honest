@@ -68,6 +68,21 @@ static size_t skip_line_whitespace(const char *src, size_t pos, size_t len) {
     return pos;
 }
 
+/* Extraction deliberately accepts a valid document prefix followed by prose.
+ * Every other parse error still invalidates the candidate. */
+static int candidate_has_fatal_errors(const hon_diag_list *diags) {
+    static const char trailing[] = "unexpected tokens after end of document";
+
+    if (!diags) return 0;
+    for (uint32_t i = 0; i < diags->count; i++) {
+        if (diags->items[i].level == HON_DIAG_ERROR &&
+            strcmp(diags->items[i].message, trailing) != 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (hon_cli_init() < 0) return 1;
     FILE *f = stdin;
@@ -144,7 +159,7 @@ int main(int argc, char **argv) {
                 hon_diag_list diags = {0};
                 hon_document *doc = hon_parse(src + candidate,
                                               extract_end - candidate, &diags);
-                if (doc && !hon_cli_has_errors(&diags)) {
+                if (doc && !candidate_has_fatal_errors(&diags)) {
                     size_t out_len;
                     char *wire = hon_serialise(doc, HON_MODE_WIRE, &out_len);
                     if (wire) {
@@ -174,7 +189,7 @@ int main(int argc, char **argv) {
                 /* Try parsing from here to end of input */
                 hon_diag_list diags = {0};
                 hon_document *doc = hon_parse(src + ws, len - ws, &diags);
-                if (doc && !hon_cli_has_errors(&diags)) {
+                if (doc && !candidate_has_fatal_errors(&diags)) {
                     size_t out_len;
                     char *wire = hon_serialise(doc, HON_MODE_WIRE, &out_len);
                     if (wire) {
