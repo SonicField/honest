@@ -1157,6 +1157,21 @@ static void diag_detach_from_arena(hon_diag_list *diags) {
 
 /* ---- Public API ---- */
 
+static hon_diagnostic invalid_utf8_diagnostic = {
+    .level = HON_DIAG_ERROR,
+    .line = 1,
+    .col = 1,
+    .message = "input is not valid UTF-8",
+};
+
+static void set_invalid_utf8_diagnostic(hon_diag_list *diags) {
+    if (!diags) return;
+    diags->items = &invalid_utf8_diagnostic;
+    diags->count = 1;
+    diags->cap = 1;
+    diags->owns_memory = false;
+}
+
 hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
     init_primitives();
 
@@ -1185,9 +1200,7 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
     if (diags) hon_diag_init(diags, arena);
 
     if (!valid_utf8(arena_src, len)) {
-        hon_diag_push(diags, arena, HON_DIAG_ERROR, 1, 1,
-                      "input is not valid UTF-8");
-        diag_detach_from_arena(diags);
+        set_invalid_utf8_diagnostic(diags);
         hon_arena_free(arena);
         return NULL;
     }
@@ -1236,9 +1249,7 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
     if (diags) hon_diag_init(diags, arena);
 
     if (!valid_utf8(arena_src, len)) {
-        hon_diag_push(diags, arena, HON_DIAG_ERROR, 1, 1,
-                      "input is not valid UTF-8");
-        diag_detach_from_arena(diags);
+        set_invalid_utf8_diagnostic(diags);
         hon_arena_free(arena);
         return NULL;
     }
