@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 
 /* ---- Parser State ---- */
 
@@ -42,6 +43,59 @@ typedef struct {
 
 static hon_type  *parse_type_definition(parser *p);
 static hon_value *parse_value(parser *p, hon_type *type);
+
+static int utf8_decode_one(const unsigned char *s, size_t len,
+                           uint32_t *codepoint, size_t *used) {
+    uint32_t cp;
+    size_t width;
+
+    if (len == 0) return -1;
+    if (s[0] < 0x80) {
+        cp = s[0];
+        width = 1;
+    } else if (s[0] >= 0xC2 && s[0] <= 0xDF) {
+        cp = s[0] & 0x1F;
+        width = 2;
+    } else if (s[0] >= 0xE0 && s[0] <= 0xEF) {
+        cp = s[0] & 0x0F;
+        width = 3;
+    } else if (s[0] >= 0xF0 && s[0] <= 0xF4) {
+        cp = s[0] & 0x07;
+        width = 4;
+    } else {
+        return -1;
+    }
+
+    if (width > len) return -1;
+    for (size_t i = 1; i < width; i++) {
+        if ((s[i] & 0xC0) != 0x80) return -1;
+        cp = (cp << 6) | (s[i] & 0x3F);
+    }
+    if ((width == 3 && cp < 0x800) ||
+        (width == 4 && cp < 0x10000) ||
+        (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF) {
+        return -1;
+    }
+
+    *codepoint = cp;
+    *used = width;
+    return 0;
+}
+
+static bool valid_utf8(const char *src, size_t len) {
+    size_t offset = 0;
+    while (offset < len) {
+        uint32_t codepoint;
+        size_t used;
+        if (utf8_decode_one((const unsigned char *)src + offset, len - offset,
+                            &codepoint, &used) < 0) {
+            return false;
+        }
+        (void)codepoint;
+        offset += used;
+    }
+    return true;
+}
 
 /* ---- Helpers ---- */
 
@@ -271,6 +325,15 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
 
     hon_type *tag_type = resolve_type_ref(p, tag_type_name.text,
                                            tag_type_name.line, tag_type_name.col);
+    hon_type *resolved_tag = hon_resolve_alias(tag_type);
+    bool enum_tag = resolved_tag && resolved_tag->kind == HON_TYPE_ENUM;
+    bool bool_tag = resolved_tag && resolved_tag->kind == HON_TYPE_PRIMITIVE &&
+                    resolved_tag->u.prim == HON_PRIM_BOOLEAN;
+    if (!enum_tag && !bool_tag) {
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      tag_type_name.line, tag_type_name.col,
+                      "variant discriminant must be an enumeration or Boolean");
+    }
 
     expect_skip(p, HON_TOK_OF);
 
@@ -290,6 +353,32 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
             break;
 
         hon_token label = next_skip_comments(p); /* consume label */
+        bool valid_label = false;
+        if (enum_tag && label.kind == HON_TOK_IDENT) {
+            for (uint32_t i = 0; i < resolved_tag->u.enumeration.value_count; i++) {
+                if (hon_str_eq(resolved_tag->u.enumeration.values[i], label.text)) {
+                    valid_label = true;
+                    break;
+                }
+            }
+        } else if (bool_tag &&
+                   (label.kind == HON_TOK_TRUE || label.kind == HON_TOK_FALSE)) {
+            valid_label = true;
+        }
+        if (!valid_label) {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                          label.line, label.col,
+                          "invalid variant arm label '%.*s'",
+                          (int)label.text.len, label.text.data);
+        }
+        for (uint32_t i = 0; i < arm_count; i++) {
+            if (hon_str_eq(arms[i].label, label.text)) {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              label.line, label.col,
+                              "duplicate variant arm '%.*s'",
+                              (int)label.text.len, label.text.data);
+            }
+        }
         expect_skip(p, HON_TOK_COLON);
         expect_skip(p, HON_TOK_LPAREN);
 
@@ -564,10 +653,24 @@ static hon_value *parse_value(parser *p, hon_type *type) {
             } else {
                 val->kind = HON_VAL_INT;
                 char buf[32];
-                size_t len = t.text.len < 31 ? t.text.len : 31;
-                memcpy(buf, t.text.data, len);
-                buf[len] = '\0';
-                val->u.integer = strtoll(buf, NULL, 10);
+                char *end;
+                if (t.text.len >= sizeof(buf)) {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  t.line, t.col, "integer literal is too long");
+                    val = NULL;
+                    break;
+                }
+                memcpy(buf, t.text.data, t.text.len);
+                buf[t.text.len] = '\0';
+                errno = 0;
+                int64_t parsed = strtoll(buf, &end, 10);
+                if (errno == ERANGE || *end != '\0') {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  t.line, t.col, "integer literal is out of range");
+                    val = NULL;
+                    break;
+                }
+                val->u.integer = parsed;
                 /* Range validation */
                 int64_t v = val->u.integer;
                 switch (resolved->u.prim) {
@@ -603,10 +706,24 @@ static hon_value *parse_value(parser *p, hon_type *type) {
             } else {
                 val->kind = HON_VAL_REAL;
                 char buf[64];
-                size_t len = t.text.len < 63 ? t.text.len : 63;
-                memcpy(buf, t.text.data, len);
-                buf[len] = '\0';
-                val->u.real = strtod(buf, NULL);
+                char *end;
+                if (t.text.len >= sizeof(buf)) {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  t.line, t.col, "real literal is too long");
+                    val = NULL;
+                    break;
+                }
+                memcpy(buf, t.text.data, t.text.len);
+                buf[t.text.len] = '\0';
+                errno = 0;
+                double parsed = strtod(buf, &end);
+                if (errno == ERANGE || *end != '\0' || !isfinite(parsed)) {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  t.line, t.col, "real literal is out of range");
+                    val = NULL;
+                    break;
+                }
+                val->u.real = parsed;
             }
             break;
 
@@ -617,14 +734,18 @@ static hon_value *parse_value(parser *p, hon_type *type) {
                 val = NULL;
             } else {
                 hon_str unesc = unescape_string(p, t.text);
-                val->kind = HON_VAL_CHAR;
-                /* Decode first UTF-8 codepoint */
-                if (unesc.len > 0) {
-                    const unsigned char *u = (const unsigned char *)unesc.data;
-                    if (u[0] < 0x80) val->u.character = u[0];
-                    else if ((u[0] & 0xE0) == 0xC0) val->u.character = ((uint32_t)(u[0] & 0x1F) << 6) | (u[1] & 0x3F);
-                    else if ((u[0] & 0xF0) == 0xE0) val->u.character = ((uint32_t)(u[0] & 0x0F) << 12) | ((uint32_t)(u[1] & 0x3F) << 6) | (u[2] & 0x3F);
-                    else if ((u[0] & 0xF8) == 0xF0) val->u.character = ((uint32_t)(u[0] & 0x07) << 18) | ((uint32_t)(u[1] & 0x3F) << 12) | ((uint32_t)(u[2] & 0x3F) << 6) | (u[3] & 0x3F);
+                uint32_t codepoint;
+                size_t used;
+                if (utf8_decode_one((const unsigned char *)unesc.data,
+                                    unesc.len, &codepoint, &used) < 0 ||
+                    used != unesc.len) {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  t.line, t.col,
+                                  "Char must contain exactly one Unicode scalar");
+                    val = NULL;
+                } else {
+                    val->kind = HON_VAL_CHAR;
+                    val->u.character = codepoint;
                 }
             }
             break;
@@ -721,6 +842,15 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
 
         hon_token fname = expect_skip(p, HON_TOK_IDENT);
         if (fname.kind == HON_TOK_ERROR) return NULL;
+        if (!hon_str_eq(fname.text, type->u.record.fields[i].name)) {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                          fname.line, fname.col,
+                          "expected field '%.*s', got '%.*s'",
+                          (int)type->u.record.fields[i].name.len,
+                          type->u.record.fields[i].name.data,
+                          (int)fname.text.len, fname.text.data);
+            return NULL;
+        }
 
         expect_skip(p, HON_TOK_COLON);
 
@@ -750,9 +880,41 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
         /* Parse tag field: name : value */
         hon_token tag_fname = expect_skip(p, HON_TOK_IDENT);
         if (tag_fname.kind == HON_TOK_ERROR) return NULL;
+        if (!hon_str_eq(tag_fname.text, type->u.record.tag_name)) {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                          tag_fname.line, tag_fname.col,
+                          "expected variant tag '%.*s', got '%.*s'",
+                          (int)type->u.record.tag_name.len,
+                          type->u.record.tag_name.data,
+                          (int)tag_fname.text.len, tag_fname.text.data);
+            return NULL;
+        }
         expect_skip(p, HON_TOK_COLON);
 
         hon_token tag_val = next_skip_comments(p);
+        hon_type *tag_type = hon_resolve_alias(type->u.record.tag_type);
+        bool valid_tag = false;
+        if (tag_type && tag_type->kind == HON_TYPE_ENUM &&
+            tag_val.kind == HON_TOK_IDENT) {
+            for (uint32_t i = 0; i < tag_type->u.enumeration.value_count; i++) {
+                if (hon_str_eq(tag_type->u.enumeration.values[i], tag_val.text)) {
+                    valid_tag = true;
+                    break;
+                }
+            }
+        } else if (tag_type && tag_type->kind == HON_TYPE_PRIMITIVE &&
+                   tag_type->u.prim == HON_PRIM_BOOLEAN &&
+                   (tag_val.kind == HON_TOK_TRUE || tag_val.kind == HON_TOK_FALSE)) {
+            valid_tag = true;
+        }
+        if (!valid_tag) {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                          tag_val.line, tag_val.col,
+                          "invalid value for variant discriminant '%.*s'",
+                          (int)type->u.record.tag_name.len,
+                          type->u.record.tag_name.data);
+            return NULL;
+        }
         val->u.record.tag_value = tag_val.text;
 
         /* Find matching arm */
@@ -776,6 +938,15 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
 
                 hon_token vfname = expect_skip(p, HON_TOK_IDENT);
                 if (vfname.kind == HON_TOK_ERROR) return NULL;
+                if (!hon_str_eq(vfname.text, matched_arm->fields[i].name)) {
+                    hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                                  vfname.line, vfname.col,
+                                  "expected variant field '%.*s', got '%.*s'",
+                                  (int)matched_arm->fields[i].name.len,
+                                  matched_arm->fields[i].name.data,
+                                  (int)vfname.text.len, vfname.text.data);
+                    return NULL;
+                }
                 expect_skip(p, HON_TOK_COLON);
 
                 hon_value *vfval = parse_value(p, matched_arm->fields[i].type);
@@ -787,6 +958,11 @@ static hon_value *parse_record_value(parser *p, hon_type *type) {
 
             val->u.record.variant_fields      = vfields;
             val->u.record.variant_field_count = matched_arm->field_count;
+        } else if (!matched_arm) {
+            hon_diag_push(p->diags, p->arena, HON_DIAG_WARNING,
+                          tag_val.line, tag_val.col,
+                          "no variant arm for discriminant value '%.*s'",
+                          (int)tag_val.text.len, tag_val.text.data);
         }
     }
 
@@ -881,6 +1057,12 @@ static hon_document *parse_document(parser *p) {
                 t = next_skip_comments(p);
             } while (t.kind != HON_TOK_SEMICOLON && t.kind != HON_TOK_EOF);
         }
+    }
+    if (p->type_count == 0) {
+        hon_token t = peek_skip_comments(p);
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      t.line, t.col,
+                      "declarations section requires at least one type");
     }
 
     /* Data section: parse var declarations */
@@ -994,6 +1176,14 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
 
     if (diags) hon_diag_init(diags, arena);
 
+    if (!valid_utf8(arena_src, len)) {
+        hon_diag_push(diags, arena, HON_DIAG_ERROR, 1, 1,
+                      "input is not valid UTF-8");
+        diag_detach_from_arena(diags);
+        hon_arena_free(arena);
+        return NULL;
+    }
+
     p.types = hon_arena_alloc(arena, sizeof(hon_type *) * p.type_cap,
                               _Alignof(hon_type *));
     p.vars  = hon_arena_alloc(arena, sizeof(hon_variable) * p.var_cap,
@@ -1036,6 +1226,14 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
     };
 
     if (diags) hon_diag_init(diags, arena);
+
+    if (!valid_utf8(arena_src, len)) {
+        hon_diag_push(diags, arena, HON_DIAG_ERROR, 1, 1,
+                      "input is not valid UTF-8");
+        diag_detach_from_arena(diags);
+        hon_arena_free(arena);
+        return NULL;
+    }
 
     p.types = hon_arena_alloc(arena, sizeof(hon_type *) * p.type_cap,
                               _Alignof(hon_type *));

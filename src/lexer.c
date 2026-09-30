@@ -189,6 +189,10 @@ static hon_token lex_number(hon_lexer *lex) {
         kind = HON_TOK_REAL;
         advance(lex);
         if (peek_char(lex) == '+' || peek_char(lex) == '-') advance(lex);
+        if (at_end(lex) || !isdigit((unsigned char)peek_char(lex))) {
+            size_t len = (size_t)(lex->src + lex->pos - start);
+            return make_token(HON_TOK_ERROR, start, len, start_line, start_col);
+        }
         while (!at_end(lex) && isdigit((unsigned char)peek_char(lex))) {
             advance(lex);
         }

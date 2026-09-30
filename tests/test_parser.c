@@ -42,6 +42,14 @@ static bool has_errors(const hon_diag_list *diags) {
     return false;
 }
 
+static void assert_rejected(const char *src, size_t len, const char *message) {
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, len, &diags);
+    ASSERT(!doc || has_errors(&diags), message);
+    if (doc) hon_doc_free(doc);
+    else hon_diag_free(&diags);
+}
+
 static void test_simple_enum(void) {
     const char *src =
         "type\n"
@@ -554,6 +562,85 @@ static void test_valid_byte_range(void) {
     hon_doc_free(doc);
 }
 
+static void test_record_value_schema_validation(void) {
+    assert_rejected(
+        "type R = record x : Integer; end; var r : R = (wrong : 7);",
+        strlen("type R = record x : Integer; end; var r : R = (wrong : 7);"),
+        "record rejects undeclared field name");
+    assert_rejected(
+        "type R = record x : Integer; y : Integer; end; "
+        "var r : R = (x : 1; x : 2);",
+        strlen("type R = record x : Integer; y : Integer; end; "
+               "var r : R = (x : 1; x : 2);"),
+        "record rejects duplicate field in place of required field");
+}
+
+static void test_variant_schema_validation(void) {
+    const char *wrong_tag =
+        "type K = (A, B); R = record case kind : K of "
+        "A : (x : Integer); B : (); end; "
+        "var r : R = (wrong : A; x : 1);";
+    const char *unknown_tag =
+        "type K = (A, B); R = record case kind : K of "
+        "A : (x : Integer); B : (); end; "
+        "var r : R = (kind : Z);";
+    const char *wrong_arm_field =
+        "type K = (A, B); R = record case kind : K of "
+        "A : (x : Integer); B : (); end; "
+        "var r : R = (kind : A; wrong : 1);";
+    const char *integer_tag =
+        "type R = record case kind : Integer of A : (); end; "
+        "var r : R = (kind : 1);";
+    const char *unknown_arm =
+        "type K = (A, B); R = record case kind : K of Z : (); end;";
+    const char *duplicate_arm =
+        "type K = (A, B); R = record case kind : K of "
+        "A : (); A : (); end;";
+
+    assert_rejected(wrong_tag, strlen(wrong_tag),
+                    "variant rejects incorrect tag field name");
+    assert_rejected(unknown_tag, strlen(unknown_tag),
+                    "variant rejects value outside discriminant enumeration");
+    assert_rejected(wrong_arm_field, strlen(wrong_arm_field),
+                    "variant rejects undeclared arm field name");
+    assert_rejected(integer_tag, strlen(integer_tag),
+                    "variant rejects non-enum, non-Boolean discriminant type");
+    assert_rejected(unknown_arm, strlen(unknown_arm),
+                    "variant rejects arm outside discriminant enumeration");
+    assert_rejected(duplicate_arm, strlen(duplicate_arm),
+                    "variant rejects duplicate arm label");
+}
+
+static void test_primitive_rejections(void) {
+    static const char *const malformed_reals[] = {"1e", "1e+", "1e-"};
+    const char *char_src = "type C = Char; var c : C = 'ab';";
+    const char *long_src =
+        "type L = LongInt; var n : L = 9223372036854775808;";
+    const char invalid_utf8[] =
+        "type S = String; var s : S = 'bad\xFF';";
+
+    assert_rejected(char_src, strlen(char_src),
+                    "Char rejects more than one Unicode scalar");
+    assert_rejected(long_src, strlen(long_src),
+                    "LongInt rejects values above INT64_MAX");
+    assert_rejected(invalid_utf8, sizeof(invalid_utf8) - 1,
+                    "String rejects invalid UTF-8 bytes");
+
+    for (size_t i = 0; i < sizeof(malformed_reals) / sizeof(malformed_reals[0]); i++) {
+        char src[128];
+        int n = snprintf(src, sizeof(src),
+                         "type R = Real; var r : R = %s;", malformed_reals[i]);
+        ASSERT(n > 0 && (size_t)n < sizeof(src), "real rejection fixture fits");
+        assert_rejected(src, (size_t)n, "malformed exponent is rejected");
+    }
+}
+
+static void test_declarations_are_required(void) {
+    const char *src = "type";
+    assert_rejected(src, strlen(src),
+                    "declarations section requires at least one declaration");
+}
+
 int main(void) {
     test_simple_enum();
     test_simple_record();
@@ -577,6 +664,10 @@ int main(void) {
     test_duplicate_enum_value();
     test_duplicate_field_name();
     test_valid_byte_range();
+    test_record_value_schema_validation();
+    test_variant_schema_validation();
+    test_primitive_rejections();
+    test_declarations_are_required();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
