@@ -491,7 +491,7 @@ The format was designed to be easy to implement correctly. If your parser is bec
 
 Two reference implementations are provided:
 
-- **C** (`src/`, `include/honest.h`) — arena-allocated, single-pass, ~2500 lines. Includes typed field accessors (`hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char`) and 637 tests across 7 suites with AddressSanitizer coverage.
+- **C** (`src/`, `include/honest.h`) — arena-allocated and single-pass. Includes typed field accessors (`hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char`) and seven C test suites plus black-box CLI checks with AddressSanitizer and UndefinedBehaviorSanitizer coverage.
 
 - **Python** (`python/honest/`) — pure Python, ~600 lines. Demonstrates Pythonic API design with auto-unwrapping (leaf values return native types) and attribute-style access. Includes `extract()` for finding Honest documents in mixed text. 34 pytest tests.
 

@@ -120,19 +120,20 @@ type
   end;
 ```
 
-No flags — all arguments are positional.
+`-h` and `--help` show usage. All other arguments are positional.
 
 ### Field Navigation
 
-Fields support dot-path notation for nested access:
+Field paths are relative to the separately supplied variable name and support
+dot-path notation for nested access:
 
-- `result.name` — field `name` inside record variable `result`
-- `result.scores.0` — first element of sequence field `scores`
-- `result.scores.2.label` — field `label` of third element
+- `name` — field `name` inside the selected variable
+- `scores.0` — first element of sequence field `scores`
+- `scores.2.label` — field `label` of the third element
 
 ### Output Format
 
-One value per line, raw (unquoted):
+Each requested value is emitted raw (unquoted), followed by a newline:
 
 | Type | Output |
 |------|--------|
@@ -144,7 +145,8 @@ One value per line, raw (unquoted):
 | Enumeration | Unquoted value name |
 | Record/Sequence | Type name (warning to stderr) |
 
-Missing fields print an empty line and set exit code to 1.
+Missing fields print an empty line and set exit code to 1. Raw strings may
+contain newlines, so one requested value is not necessarily one physical line.
 
 ### Exit Codes
 
@@ -190,7 +192,7 @@ type
   end;
 ```
 
-Either `--rulebook` or `--typedef` is required (not both).
+Exactly one of `--rulebook` or `--typedef` is required.
 
 ### Field Assignment
 
@@ -210,6 +212,8 @@ Values are assigned via `field=value` arguments:
 - Sequence indices must be contiguous (0, 1, 2, ...).
 - All values must be valid UTF-8.
 - Maximum 256 field assignments, maximum 32 levels of nesting.
+- Unknown, malformed, duplicate, or unused assignments are errors.
+- Variant-record arms cannot currently be constructed by this CLI.
 
 ### Exit Codes
 
@@ -255,14 +259,16 @@ type
   end;
 ```
 
-No flags. Reads from stdin by default.
+`-h` and `--help` show usage. Reads from stdin by default.
 
 ### Behaviour
 
 - Scans input for Honest documents by looking for the `type` keyword.
-- Recognises Markdown code fences (`` ``` ``) and searches within them first.
+- Recognises Markdown code fences (`` ``` ``) when encountered during the
+  input-order scan.
 - On finding a valid document, outputs it in wire mode to stdout.
-- Returns the first valid document found — does not extract multiple documents.
+- Returns the first error-free document found — does not extract multiple
+  documents.
 
 ### Exit Codes
 

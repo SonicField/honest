@@ -46,6 +46,7 @@ Key entry points:
 
 - **[User Guide](docs/user-guide.md)** — tutorial introduction to reading and writing Honest documents
 - **[CLI Reference](docs/cli-reference.md)** — all 5 command-line tools with options, exit codes, and examples
+- **[CLI Contract](docs/CONTRACT.md)** — precise streams, failures, limits, and portability boundary
 - **[Python Library](docs/python-library.md)** — API reference, auto-unwrapping, extract, and examples
 - **[Format Specification](specs/honest-spec.md)** — the formal language specification with complete EBNF grammar
 
@@ -55,10 +56,28 @@ Honest includes a C reference implementation (`libhonest` + CLI tools) and a Pyt
 
 ```bash
 make            # build libhonest and CLI tools
-make check      # run C test suite (637 tests)
-make check-asan # run tests under AddressSanitizer
-make audit      # run all verification: C tests, ASAN, pytest, conformance
-pip install python/  # install Python library
+make test       # C/CLI tests, Python tests, and cross-implementation checks
+make sanitize   # C/CLI tests under AddressSanitizer and UBSan
+make analyze    # build with GCC's static analyser
+make audit      # run test, sanitize, and analyze
+pip install python/  # install the optional Python library
+```
+
+The C implementation requires a C11 compiler and `make`. The full test suite
+also requires Python 3.10+ and pytest (`pip install './python[dev]'`).
+
+Install the five CLIs, static library, and public header under `/usr/local`:
+
+```bash
+make
+sudo make install
+```
+
+Packaging can be tested without writing to the host installation:
+
+```bash
+stage=$(mktemp -d)
+make install DESTDIR="$stage"
 ```
 
 ### C Library
@@ -168,7 +187,7 @@ honest/
   src/                          # C reference implementation
   tools/                        # CLI tools (honest-parse, honest-fmt, honest-get,
                                 #            honest-build, honest-extract)
-  tests/                        # C test suite (637 tests, 7 suites)
+  tests/                        # C suites and black-box CLI tests
   python/
     honest/                     # Python library (parse, serialise, extract)
     tests/                      # Python test suite (34 tests)
@@ -194,10 +213,25 @@ The format specification and both reference implementations are complete.
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | Complete — 637 tests, ASAN clean |
+| C library (libhonest) | Complete — 647 assertions, ASan/UBSan clean |
 | Python library | Complete — 34 tests |
 | CLI tools | Complete |
 | Cross-impl conformance | Complete — 6/6 byte-identical wire output |
+
+The C assertions are supplemented by black-box checks of all five executables.
+See the [CLI contract](docs/CONTRACT.md) for exact exit behaviour and
+deliberately unsupported cases.
+
+## Limitations
+
+- The command-line tools read each input fully into memory; they are not
+  streaming parsers.
+- `honest-extract` returns the first valid candidate and recognises only the
+  conservative boundaries documented in the CLI contract.
+- `honest-build` does not construct variant-record arms and caps assignments
+  and nesting to protect command-line use.
+- Windows is not currently supported. CI targets Linux and macOS on x86-64
+  and ARM64.
 
 ## License
 

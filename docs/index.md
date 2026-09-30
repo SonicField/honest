@@ -8,6 +8,7 @@
 
 - **[Format Specification](../specs/honest-spec.md)** — the formal language specification with complete EBNF grammar
 - **[CLI Reference](cli-reference.md)** — all 5 command-line tools with options, exit codes, and examples
+- **[CLI Contract](CONTRACT.md)** — exact streams, exit status, limits, and portability boundary
 - **[Python Library](python-library.md)** — API reference, auto-unwrapping, extract, and examples
 
 ## For Implementors

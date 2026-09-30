@@ -7,14 +7,16 @@ How to run, understand, and extend the Honest test suites.
 ## Quick Start
 
 ```bash
-make audit    # run everything: C tests, ASAN, Python tests, conformance
+make test     # C/CLI tests, Python tests, and conformance
+make audit    # make test plus sanitizers and static analysis
 ```
 
 Or run each verification step individually:
 
 ```bash
-make check                                    # C tests (637 tests, 7 suites)
-make check-asan                               # C tests under AddressSanitizer
+make check                                    # C suites and black-box CLI checks
+make sanitize                                 # C/CLI tests under ASan and UBSan
+make analyze                                  # GCC static analysis build
 python3 -m pytest python/tests/ -v            # Python tests (34 tests)
 bash scripts/cross-impl-conformance.sh        # Cross-impl conformance (L1+L2)
 bash scripts/cross-impl-conformance-level3.sh # Cross-impl conformance (L3)
@@ -34,13 +36,19 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
 | Parser | `test_parser.c` | 92 | Type declarations, data values, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
-| Tools | `test_tools.c` | 51 | CLI tool integration (parse, fmt, get, build, extract) |
+| Tools | `test_tools.c` | 61 | CLI integration for get, build, and extract |
+
+`tests/test_cli.sh` adds black-box contract checks for all five installed
+programs, including malformed input, argument boundaries, Unicode construction,
+format idempotence, and output failures where `/dev/full` is available.
 
 ### Running C Tests
 
 ```bash
 make check          # build and run all suites
-make check-asan     # clean build with AddressSanitizer, run all suites
+make sanitize       # clean build with AddressSanitizer and UBSan
+make check-asan     # AddressSanitizer only
+make check-ubsan    # UndefinedBehaviorSanitizer only
 make check-leak     # clean build with LeakSanitizer, run all suites
 ```
 
@@ -151,10 +159,9 @@ make audit
 ```
 
 This executes:
-1. `make check` — 637 C tests across 7 suites
-2. `make check-asan` — same tests under AddressSanitizer (clean rebuild)
-3. `python3 -m pytest python/tests/ -v` — 34 Python tests
-4. `bash scripts/cross-impl-conformance.sh` — Level 1+2 conformance
-5. `bash scripts/cross-impl-conformance-level3.sh` — Level 3 conformance
+1. `make test` — 647 C assertions, CLI checks, 34 Python tests, and both
+   cross-implementation conformance levels
+2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
+3. `make analyze` — warning-clean GCC static-analysis build
 
 If any step fails, the audit stops immediately. A successful run prints `Full audit passed.`
