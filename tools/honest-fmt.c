@@ -19,6 +19,7 @@ static void usage(FILE *out, const char *prog) {
 }
 
 int main(int argc, char **argv) {
+    if (hon_cli_init() < 0) return 1;
     hon_serial_mode mode = HON_MODE_DOCUMENT;
     const char *path = NULL;
 

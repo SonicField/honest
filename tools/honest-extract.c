@@ -69,6 +69,7 @@ static size_t skip_line_whitespace(const char *src, size_t pos, size_t len) {
 }
 
 int main(int argc, char **argv) {
+    if (hon_cli_init() < 0) return 1;
     FILE *f = stdin;
     if (argc == 2 &&
         (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {

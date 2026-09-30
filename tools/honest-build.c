@@ -562,6 +562,7 @@ static void usage(FILE *out, const char *prog) {
 }
 
 int main(int argc, char **argv) {
+    if (hon_cli_init() < 0) return 1;
     const char *type_name = NULL;
     const char *var_name = "result";
     const char *rulebook_path = NULL;

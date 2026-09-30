@@ -19,6 +19,7 @@ static void usage(FILE *out, const char *prog) {
 }
 
 int main(int argc, char **argv) {
+    if (hon_cli_init() < 0) return 1;
     bool quiet   = false;
     bool verbose = false;
     const char *path = NULL;

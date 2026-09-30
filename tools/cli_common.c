@@ -2,8 +2,18 @@
 
 #include <errno.h>
 #include <stdint.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+
+int hon_cli_init(void) {
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        fprintf(stderr, "error: failed to configure output handling: %s\n",
+                strerror(errno));
+        return -1;
+    }
+    return 0;
+}
 
 char *hon_cli_read_all(FILE *input, size_t *out_len) {
     size_t cap = 4096;

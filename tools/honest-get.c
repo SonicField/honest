@@ -98,6 +98,7 @@ static void usage(FILE *out, const char *prog) {
 }
 
 int main(int argc, char **argv) {
+    if (hon_cli_init() < 0) return 1;
     if (argc == 2 &&
         (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         usage(stdout, argv[0]);

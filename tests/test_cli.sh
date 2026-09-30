@@ -51,6 +51,22 @@ expect_stdout() {
     fi
 }
 
+expect_broken_pipe_status() {
+    local description=$1
+    shift
+    local pipe_status
+    tests=$((tests + 1))
+    set +e
+    "$@" 2>"$tmp_dir/stderr" | head -c 0 >/dev/null
+    pipe_status=${PIPESTATUS[0]}
+    set -e
+    if [[ $pipe_status -eq 1 ]]; then
+        passed=$((passed + 1))
+    else
+        fail "$description (expected status 1, got $pipe_status)"
+    fi
+}
+
 for tool in honest-parse honest-fmt honest-get honest-build honest-extract; do
     tests=$((tests + 1))
     if [[ -x "$bin_dir/$tool" ]]; then
@@ -210,6 +226,33 @@ if [[ -e /dev/full ]]; then
         fi
     done
 fi
+
+# Force writes beyond a typical pipe buffer so a reader that closes
+# immediately reliably exposes SIGPIPE/EPIPE handling.
+large_value=$(dd if=/dev/zero bs=131072 count=1 2>/dev/null | tr '\0' x)
+large_doc="$tmp_dir/large.honest"
+printf "type\n  R = record s : String; end;\nvar result : R = (s : '%s');\n" \
+    "$large_value" >"$large_doc"
+
+large_types="$tmp_dir/large-types.honest"
+{
+    printf 'type\n'
+    for ((i = 0; i < 6000; i++)); do
+        printf '  T%d = Integer;\n' "$i"
+    done
+} >"$large_types"
+
+expect_broken_pipe_status "parse maps SIGPIPE to an operational failure" \
+    "$bin_dir/honest-parse" --verbose "$large_types"
+expect_broken_pipe_status "fmt maps SIGPIPE to an operational failure" \
+    "$bin_dir/honest-fmt" "$large_doc"
+expect_broken_pipe_status "get maps SIGPIPE to an operational failure" \
+    "$bin_dir/honest-get" "$large_doc" result s
+expect_broken_pipe_status "build maps SIGPIPE to an operational failure" \
+    "$bin_dir/honest-build" --type R \
+    --typedef 'type R = record s : String; end;' "s=$large_value"
+expect_broken_pipe_status "extract maps SIGPIPE to an operational failure" \
+    "$bin_dir/honest-extract" "$large_doc"
 
 printf '%d/%d CLI checks passed\n' "$passed" "$tests"
 [[ $passed -eq $tests ]]
