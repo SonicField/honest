@@ -6,6 +6,7 @@ Parses declarations then data, using type context to disambiguate values.
 from __future__ import annotations
 
 import math
+import warnings
 
 from .lexer import Lexer, Token, TokenKind
 from .types import (
@@ -108,6 +109,10 @@ class Parser:
             if ftype is None:
                 raise self._error(f"unknown type '{type_tok.text}'", type_tok)
 
+            if any(field.name == name_tok.text for field in fields):
+                raise self._error(
+                    f"duplicate field name '{name_tok.text}'", name_tok)
+
             fields.append(Field(name=name_tok.text, type=ftype))
 
             p = self._peek()
@@ -136,6 +141,17 @@ class Parser:
             tag_type = self._types.get(type_tok.text)
             if tag_type is None:
                 raise self._error(f"unknown type '{type_tok.text}'", type_tok)
+            resolved_tag = tag_type.resolve()
+            enum_tag = resolved_tag.kind == TypeKind.ENUM
+            bool_tag = (
+                resolved_tag.kind == TypeKind.PRIMITIVE
+                and resolved_tag.prim == Primitive.BOOLEAN
+            )
+            if not enum_tag and not bool_tag:
+                raise self._error(
+                    "variant discriminant must be an enumeration or Boolean",
+                    type_tok,
+                )
 
             self._expect(TokenKind.OF, "variant")
 
@@ -145,6 +161,21 @@ class Parser:
                 label_tok = self._next()
                 if label_tok.kind not in (TokenKind.IDENT, TokenKind.TRUE, TokenKind.FALSE):
                     raise self._error(f"expected variant label, got {label_tok.kind.name}", label_tok)
+                if enum_tag:
+                    if (label_tok.kind != TokenKind.IDENT or
+                            label_tok.text not in (resolved_tag.values or [])):
+                        raise self._error(
+                            f"invalid variant arm label '{label_tok.text}'",
+                            label_tok,
+                        )
+                elif label_tok.kind not in (TokenKind.TRUE, TokenKind.FALSE):
+                    raise self._error(
+                        f"invalid Boolean variant arm label '{label_tok.text}'",
+                        label_tok,
+                    )
+                if any(arm.label == label_tok.text for arm in arms):
+                    raise self._error(
+                        f"duplicate variant arm '{label_tok.text}'", label_tok)
                 self._expect(TokenKind.COLON, "variant arm")
                 self._expect(TokenKind.LPAREN, "variant arm")
 
@@ -155,6 +186,17 @@ class Parser:
 
                 if self._peek().kind == TokenKind.SEMICOLON:
                     self._next()
+
+            expected_labels = (
+                set(resolved_tag.values or []) if enum_tag else {"True", "False"}
+            )
+            actual_labels = {arm.label for arm in arms}
+            for missing in sorted(expected_labels - actual_labels):
+                warnings.warn(
+                    f"no variant arm for discriminant value '{missing}'",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         self._expect(TokenKind.END, "record")
         return HonType(
@@ -320,14 +362,19 @@ class Parser:
                     tag_name_tok)
             self._expect(TokenKind.COLON, "variant tag")
             tag_tok = self._next()
-            if tag_tok.kind == TokenKind.IDENT:
+            tag_type = resolved.tag_type.resolve()
+            if tag_type.kind == TypeKind.ENUM:
+                if (tag_tok.kind != TokenKind.IDENT or
+                        tag_tok.text not in (tag_type.values or [])):
+                    raise self._error("invalid enumeration variant tag", tag_tok)
                 tag_value = tag_tok.text
-            elif tag_tok.kind == TokenKind.TRUE:
-                tag_value = "True"
-            elif tag_tok.kind == TokenKind.FALSE:
-                tag_value = "False"
+            elif (tag_type.kind == TypeKind.PRIMITIVE and
+                  tag_type.prim == Primitive.BOOLEAN):
+                if tag_tok.kind not in (TokenKind.TRUE, TokenKind.FALSE):
+                    raise self._error("invalid Boolean variant tag", tag_tok)
+                tag_value = tag_tok.text
             else:
-                raise self._error("expected variant tag value", tag_tok)
+                raise self._error("invalid variant discriminant type", tag_tok)
 
             # Find matching arm
             if resolved.arms:
@@ -343,6 +390,11 @@ class Parser:
                         if p.kind == TokenKind.SEMICOLON:
                             self._next()
                         fn_tok = self._expect(TokenKind.IDENT, "variant field")
+                        if fn_tok.text != af.name:
+                            raise self._error(
+                                f"expected variant field '{af.name}', got '{fn_tok.text}'",
+                                fn_tok,
+                            )
                         self._expect(TokenKind.COLON, "variant field")
                         val = self._parse_value(af.type)
                         variant_fields.append(FieldValue(name=fn_tok.text, value=val))
