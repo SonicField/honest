@@ -682,6 +682,12 @@ static void test_trailing_tokens_rejected(void) {
                     "tokens after a complete document are rejected");
 }
 
+static void test_reserved_boolean_type_rejected(void) {
+    const char *src = "type Boolean = (Yes, No);";
+    assert_rejected(src, strlen(src),
+                    "reserved Boolean name cannot be redeclared");
+}
+
 static void test_large_declarations_are_not_truncated(void) {
     char src[65536];
     size_t len = 0;
@@ -778,6 +784,7 @@ int main(void) {
     test_declarations_are_required();
     test_required_semicolons();
     test_trailing_tokens_rejected();
+    test_reserved_boolean_type_rejected();
     test_large_declarations_are_not_truncated();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);

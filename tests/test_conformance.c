@@ -354,13 +354,13 @@ static void test_duplicate_type_name(void) {
     const char *src =
         "type\n"
         "  Color = (Red, Green, Blue);\n"
-        "  Color = (Cyan, Magenta, Yellow);\n"
+        "  Color = (Red, Cyan, Magenta);\n"
         "var c : Color = Red;\n";
 
     hon_diag_list diags = {0};
     hon_document *doc = hon_parse(src, strlen(src), &diags);
 
-    /* Duplicate type name should at least produce a diagnostic */
+    /* The value is valid for both definitions, so only duplication can fail. */
     ASSERT(has_errors(&diags), "§3.7: duplicate type name produces error");
     hon_diag_free(&diags);
     if (doc) hon_doc_free(doc);

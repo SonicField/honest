@@ -169,6 +169,13 @@ static hon_type *lookup_type(parser *p, hon_str name) {
     return NULL;
 }
 
+static bool type_was_declared(const parser *p, hon_str name) {
+    for (uint32_t i = 0; i < p->type_count; i++) {
+        if (hon_str_eq(p->types[i]->name, name)) return true;
+    }
+    return false;
+}
+
 static void register_type(parser *p, hon_type *t) {
     if (p->type_count >= p->type_cap) {
         uint32_t new_cap = p->type_cap * 2;
@@ -491,11 +498,20 @@ static hon_type *parse_type_definition(parser *p) {
     hon_token name_tok = expect_skip(p, HON_TOK_IDENT);
     if (name_tok.kind == HON_TOK_ERROR) return NULL;
 
-    /* Check for duplicate type name */
-    if (lookup_type(p, name_tok.text)) {
+    /* Duplicate declarations are ambiguous. Boolean is also a reserved word. */
+    if (type_was_declared(p, name_tok.text)) {
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      name_tok.line, name_tok.col,
+                      "duplicate type declaration '%.*s'",
+                      (int)name_tok.text.len, name_tok.text.data);
+    } else if (hon_str_eq(name_tok.text, HON_STR_LIT("Boolean"))) {
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      name_tok.line, name_tok.col,
+                      "reserved type name 'Boolean' cannot be redeclared");
+    } else if (lookup_type(p, name_tok.text)) {
         hon_diag_push(p->diags, p->arena, HON_DIAG_WARNING,
                       name_tok.line, name_tok.col,
-                      "type '%.*s' redeclared (shadows previous definition)",
+                      "type '%.*s' shadows a primitive type",
                       (int)name_tok.text.len, name_tok.text.data);
     }
 
