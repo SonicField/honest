@@ -17,7 +17,7 @@ Or run each verification step individually:
 make check                                    # C suites and black-box CLI checks
 make sanitize                                 # C/CLI tests under ASan and UBSan
 make analyze                                  # GCC static analysis build
-python3 -m pytest python/tests/ -v            # Python tests (134 tests)
+python3 -m pytest python/tests/ -v            # Python tests (135 tests)
 bash scripts/cross-impl-conformance.sh        # Cross-impl conformance (L1+L2)
 bash scripts/cross-impl-conformance-level3.sh # Cross-impl conformance (L3)
 bash scripts/cross-impl-boundaries.sh         # Shared valid/invalid boundary corpus
@@ -34,7 +34,7 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 |-------|------|-------|----------------|
 | Accessors | `test_accessors.c` | 73 | `hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char` |
 | Antifragile | `test_antifragile.c` | 76 | Unknown types, rulebook divergence, registry extension |
-| Conformance | `test_conformance.c` | 215 | Round-trip fidelity, canonical form, edge cases |
+| Conformance | `test_conformance.c` | 216 | Round-trip fidelity, canonical form, edge cases |
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
 | Parser | `test_parser.c` | 133 | Type declarations, data values, schema validation, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
@@ -85,7 +85,7 @@ static void test_my_feature(void) {
 
 ## Python Tests
 
-Python tests live in `python/tests/` and currently contain 134 cases.
+Python tests live in `python/tests/` and currently contain 135 cases.
 
 ```bash
 python3 -m pytest python/tests/ -v          # all tests, verbose
@@ -167,7 +167,7 @@ make audit
 ```
 
 This executes:
-1. `make test` — 923 C assertions, 72 CLI checks, 134 Python tests, both
+1. `make test` — 924 C assertions, 72 CLI checks, 135 Python tests, both
    conformance levels, and the 54-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build

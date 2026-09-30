@@ -89,12 +89,15 @@ def _serialise_wire(doc: Document) -> str:
         parts.append(" ")
         _serialise_type_wire(t, parts)
 
-    parts.append("\n\n")
+    if doc.vars:
+        parts.append(" ")
 
-    for v in doc.vars:
+    for i, v in enumerate(doc.vars):
+        if i > 0:
+            parts.append(" ")
         parts.append(f"var {v.name} : {v.type.name} = ")
         _serialise_value_wire(v.value, parts)
-        parts.append(";\n")
+        parts.append(";")
 
     return "".join(parts)
 

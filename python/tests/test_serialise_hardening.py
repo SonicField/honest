@@ -59,3 +59,8 @@ def test_document_mode_preserves_comments_in_encounter_order():
     )
     assert "document comment" not in wire
     assert "declaration comment" not in wire
+
+
+def test_wire_mode_has_canonical_whitespace_and_no_trailing_newline():
+    doc = honest.parse("type N = Integer; var n : N = 42;")
+    assert honest.serialise(doc, wire=True) == "type N = Integer; var n : N = 42;"

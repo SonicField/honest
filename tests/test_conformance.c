@@ -422,6 +422,8 @@ static void test_wire_mode_strips_comments(void) {
     ASSERT(wire != NULL, "§5.2: wire serialisation succeeded");
 
     if (wire) {
+        ASSERT(strcmp(wire, "type N = Integer; var n : N = 42;") == 0,
+               "§5.3: wire output uses canonical single-space form");
         /* Wire output should not contain comment markers */
         ASSERT(strstr(wire, "Document comment") == NULL,
                "§5.2: brace comment stripped in wire mode");

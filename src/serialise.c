@@ -352,8 +352,12 @@ char *hon_serialise(const hon_document *doc, hon_serial_mode mode, size_t *out_l
     }
 
     b.indent--;
-    buf_char(&b, '\n');
-    buf_char(&b, '\n');
+    if (mode == HON_MODE_DOCUMENT) {
+        buf_char(&b, '\n');
+        buf_char(&b, '\n');
+    } else if (doc->var_count > 0) {
+        buf_char(&b, ' ');
+    }
 
     /* Data section */
     for (uint32_t i = 0; i < doc->var_count; i++) {
@@ -364,7 +368,12 @@ char *hon_serialise(const hon_document *doc, hon_serial_mode mode, size_t *out_l
                    doc->vars[i].type->name.len);
         buf_str(&b, " = ");
         serialise_value(&b, doc->vars[i].value);
-        buf_str(&b, ";\n");
+        buf_char(&b, ';');
+        if (mode == HON_MODE_DOCUMENT) {
+            buf_char(&b, '\n');
+        } else if (i < doc->var_count - 1) {
+            buf_char(&b, ' ');
+        }
     }
 
     buf_char(&b, '\0');
