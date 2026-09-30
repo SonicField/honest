@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 static int tests_run    = 0;
 static int tests_passed = 0;
@@ -48,6 +49,18 @@ static void assert_rejected(const char *src, size_t len, const char *message) {
     ASSERT(!doc || has_errors(&diags), message);
     if (doc) hon_doc_free(doc);
     else hon_diag_free(&diags);
+}
+
+static void appendf(char *buf, size_t cap, size_t *len, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int written = vsnprintf(buf + *len, cap - *len, fmt, args);
+    va_end(args);
+    if (written < 0 || (size_t)written >= cap - *len) {
+        fprintf(stderr, "test fixture buffer exhausted\n");
+        exit(2);
+    }
+    *len += (size_t)written;
 }
 
 static void test_simple_enum(void) {
@@ -669,6 +682,73 @@ static void test_trailing_tokens_rejected(void) {
                     "tokens after a complete document are rejected");
 }
 
+static void test_large_declarations_are_not_truncated(void) {
+    char src[65536];
+    size_t len = 0;
+    hon_diag_list diags = {0};
+
+    appendf(src, sizeof(src), &len, "type E = (");
+    for (int i = 0; i < 257; i++)
+        appendf(src, sizeof(src), &len, "%sV%d", i ? ", " : "", i);
+    appendf(src, sizeof(src), &len, ");");
+
+    hon_document *doc = hon_parse(src, len, &diags);
+    ASSERT(doc != NULL, "large enum: parse succeeds");
+    ASSERT(!has_errors(&diags), "large enum: no parse errors");
+    ASSERT(doc && doc->types[0]->u.enumeration.value_count == 257,
+           "large enum: all 257 values retained");
+    ASSERT(doc && hon_str_eq(doc->types[0]->u.enumeration.values[256],
+                            HON_STR_LIT("V256")),
+           "large enum: final value retained");
+    hon_doc_free(doc);
+
+    len = 0;
+    diags = (hon_diag_list){0};
+    appendf(src, sizeof(src), &len, "type R = record ");
+    for (int i = 0; i < 129; i++)
+        appendf(src, sizeof(src), &len, "f%d : Integer; ", i);
+    appendf(src, sizeof(src), &len, "end;");
+
+    doc = hon_parse(src, len, &diags);
+    ASSERT(doc != NULL, "large record: parse succeeds");
+    ASSERT(!has_errors(&diags), "large record: no parse errors");
+    ASSERT(doc && doc->types[0]->u.record.field_count == 129,
+           "large record: all 129 fields retained");
+    ASSERT(doc && hon_str_eq(doc->types[0]->u.record.fields[128].name,
+                            HON_STR_LIT("f128")),
+           "large record: final field retained");
+    hon_doc_free(doc);
+
+    len = 0;
+    diags = (hon_diag_list){0};
+    appendf(src, sizeof(src), &len, "type K = (");
+    for (int i = 0; i < 65; i++)
+        appendf(src, sizeof(src), &len, "%sK%d", i ? ", " : "", i);
+    appendf(src, sizeof(src), &len,
+            "); R = record case kind : K of K0 : (");
+    for (int i = 0; i < 65; i++)
+        appendf(src, sizeof(src), &len, "f%d : Integer; ", i);
+    appendf(src, sizeof(src), &len, "); ");
+    for (int i = 1; i < 65; i++)
+        appendf(src, sizeof(src), &len, "K%d : (); ", i);
+    appendf(src, sizeof(src), &len, "end;");
+
+    doc = hon_parse(src, len, &diags);
+    ASSERT(doc != NULL, "large variant: parse succeeds");
+    ASSERT(!has_errors(&diags), "large variant: no parse errors");
+    ASSERT(doc && doc->types[1]->u.record.arm_count == 65,
+           "large variant: all 65 arms retained");
+    ASSERT(doc && doc->types[1]->u.record.arms[0].field_count == 65,
+           "large variant: all 65 arm fields retained");
+    ASSERT(doc && hon_str_eq(doc->types[1]->u.record.arms[64].label,
+                            HON_STR_LIT("K64")),
+           "large variant: final arm retained");
+    ASSERT(doc && hon_str_eq(doc->types[1]->u.record.arms[0].fields[64].name,
+                            HON_STR_LIT("f64")),
+           "large variant: final arm field retained");
+    hon_doc_free(doc);
+}
+
 int main(void) {
     test_simple_enum();
     test_simple_record();
@@ -698,6 +778,7 @@ int main(void) {
     test_declarations_are_required();
     test_required_semicolons();
     test_trailing_tokens_rejected();
+    test_large_declarations_are_not_truncated();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

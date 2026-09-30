@@ -36,7 +36,7 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 | Antifragile | `test_antifragile.c` | 76 | Unknown types, rulebook divergence, registry extension |
 | Conformance | `test_conformance.c` | 215 | Round-trip fidelity, canonical form, edge cases |
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
-| Parser | `test_parser.c` | 116 | Type declarations, data values, schema validation, error recovery |
+| Parser | `test_parser.c` | 130 | Type declarations, data values, schema validation, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
 | Strict values | `test_strict_values.c` | 224 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
 | Tools | `test_tools.c` | 61 | CLI integration for get, build, and extract |
@@ -167,7 +167,7 @@ make audit
 ```
 
 This executes:
-1. `make test` — 897 C assertions, 72 CLI checks, 120 Python tests, both
+1. `make test` — 911 C assertions, 72 CLI checks, 120 Python tests, both
    conformance levels, and the 54-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build

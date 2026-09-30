@@ -197,8 +197,11 @@ static hon_type *resolve_type_ref(parser *p, hon_str name, uint32_t line, uint32
 
 static hon_type *parse_enum(parser *p, hon_str name) {
     /* Already consumed '(' */
-    hon_str values[256]; /* reasonable max for enum values */
+    uint32_t cap = 16;
     uint32_t count = 0;
+    hon_str *values = hon_arena_alloc(p->arena, sizeof(hon_str) * cap,
+                                      _Alignof(hon_str));
+    if (!values) return NULL;
 
     for (;;) {
         hon_token val = expect_skip(p, HON_TOK_IDENT);
@@ -214,9 +217,16 @@ static hon_type *parse_enum(parser *p, hon_str name) {
             }
         }
 
-        if (count < 256) {
-            values[count++] = val.text;
+        if (count == cap) {
+            uint32_t new_cap = cap * 2;
+            hon_str *new_values = hon_arena_alloc(
+                p->arena, sizeof(hon_str) * new_cap, _Alignof(hon_str));
+            if (!new_values) return NULL;
+            memcpy(new_values, values, sizeof(hon_str) * count);
+            values = new_values;
+            cap = new_cap;
         }
+        values[count++] = val.text;
 
         hon_token next = peek_skip_comments(p);
         if (next.kind == HON_TOK_COMMA) {
@@ -235,20 +245,21 @@ static hon_type *parse_enum(parser *p, hon_str name) {
     t->kind = HON_TYPE_ENUM;
     t->name = name;
     t->u.enumeration.value_count = count;
-    t->u.enumeration.values = hon_arena_alloc(p->arena,
-        sizeof(hon_str) * count, _Alignof(hon_str));
-    memcpy(t->u.enumeration.values, values, sizeof(hon_str) * count);
+    t->u.enumeration.values = values;
 
     return t;
 }
 
 /* ---- Parse Field List ---- */
 
-/* Parse fields until we hit 'case', 'end', or ')'.
-   Returns field count. Fields stored in caller-provided buffer. */
-static uint32_t parse_fields(parser *p, hon_field *fields, uint32_t max_fields,
-                             bool in_variant_arm) {
+/* Parse fields until we hit 'case', 'end', or ')'. */
+static bool parse_fields(parser *p, hon_field **out_fields,
+                         uint32_t *out_count, bool in_variant_arm) {
+    uint32_t cap = 16;
     uint32_t count = 0;
+    hon_field *fields = hon_arena_alloc(p->arena, sizeof(hon_field) * cap,
+                                        _Alignof(hon_field));
+    if (!fields) return false;
 
     for (;;) {
         hon_token peek = peek_skip_comments(p);
@@ -273,12 +284,12 @@ static uint32_t parse_fields(parser *p, hon_field *fields, uint32_t max_fields,
                           colon.line, colon.col,
                           "expected ':' after field name '%.*s'",
                           (int)name_tok.text.len, name_tok.text.data);
-            return count;
+            break;
         }
         next_skip_comments(p); /* consume ':' */
 
         hon_token type_tok = expect_skip(p, HON_TOK_IDENT);
-        if (type_tok.kind == HON_TOK_ERROR) return count;
+        if (type_tok.kind == HON_TOK_ERROR) break;
 
         hon_type *ftype = resolve_type_ref(p, type_tok.text,
                                             type_tok.line, type_tok.col);
@@ -293,11 +304,18 @@ static uint32_t parse_fields(parser *p, hon_field *fields, uint32_t max_fields,
             }
         }
 
-        if (count < max_fields) {
-            fields[count].name = name_tok.text;
-            fields[count].type = ftype;
-            count++;
+        if (count == cap) {
+            uint32_t new_cap = cap * 2;
+            hon_field *new_fields = hon_arena_alloc(
+                p->arena, sizeof(hon_field) * new_cap, _Alignof(hon_field));
+            if (!new_fields) return false;
+            memcpy(new_fields, fields, sizeof(hon_field) * count);
+            fields = new_fields;
+            cap = new_cap;
         }
+        fields[count].name = name_tok.text;
+        fields[count].type = ftype;
+        count++;
 
         /* Optional semicolon — may be followed by more fields, 'case', 'end', or ')' */
         peek = peek_skip_comments(p);
@@ -310,7 +328,9 @@ static uint32_t parse_fields(parser *p, hon_field *fields, uint32_t max_fields,
         }
     }
 
-    return count;
+    *out_fields = fields;
+    *out_count = count;
+    return true;
 }
 
 /* ---- Parse Variant Part ---- */
@@ -346,8 +366,11 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
     rec->u.record.tag_type    = tag_type;
 
     /* Parse variant arms */
-    hon_variant arms[64];
+    uint32_t arm_cap = 8;
     uint32_t arm_count = 0;
+    hon_variant *arms = hon_arena_alloc(
+        p->arena, sizeof(hon_variant) * arm_cap, _Alignof(hon_variant));
+    if (!arms) return false;
 
     for (;;) {
         hon_token peek = peek_skip_comments(p);
@@ -386,11 +409,11 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
         expect_skip(p, HON_TOK_COLON);
         expect_skip(p, HON_TOK_LPAREN);
 
-        hon_field arm_fields[64];
+        hon_field *arm_fields = NULL;
         uint32_t fcount = 0;
 
         if (peek_skip_comments(p).kind != HON_TOK_RPAREN) {
-            fcount = parse_fields(p, arm_fields, 64, true);
+            if (!parse_fields(p, &arm_fields, &fcount, true)) return false;
         }
 
         expect_skip(p, HON_TOK_RPAREN);
@@ -405,23 +428,24 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
                           "expected ';' after variant arm");
         }
 
-        if (arm_count < 64) {
-            arms[arm_count].label       = label.text;
-            arms[arm_count].field_count = fcount;
-            arms[arm_count].fields      = NULL;
-            if (fcount > 0) {
-                arms[arm_count].fields = hon_arena_alloc(p->arena,
-                    sizeof(hon_field) * fcount, _Alignof(hon_field));
-                memcpy(arms[arm_count].fields, arm_fields, sizeof(hon_field) * fcount);
-            }
-            arm_count++;
+        if (arm_count == arm_cap) {
+            uint32_t new_cap = arm_cap * 2;
+            hon_variant *new_arms = hon_arena_alloc(
+                p->arena, sizeof(hon_variant) * new_cap,
+                _Alignof(hon_variant));
+            if (!new_arms) return false;
+            memcpy(new_arms, arms, sizeof(hon_variant) * arm_count);
+            arms = new_arms;
+            arm_cap = new_cap;
         }
+        arms[arm_count].label       = label.text;
+        arms[arm_count].field_count = fcount;
+        arms[arm_count].fields      = arm_fields;
+        arm_count++;
     }
 
     rec->u.record.arm_count = arm_count;
-    rec->u.record.arms = hon_arena_alloc(p->arena,
-        sizeof(hon_variant) * arm_count, _Alignof(hon_variant));
-    memcpy(rec->u.record.arms, arms, sizeof(hon_variant) * arm_count);
+    rec->u.record.arms = arms;
 
     uint32_t legal_value_count = bool_tag ? 2u :
         (enum_tag ? resolved_tag->u.enumeration.value_count : 0u);
@@ -444,16 +468,12 @@ static hon_type *parse_record(parser *p, hon_str name) {
     t->u.record.has_variant = false;
 
     /* Parse fixed fields */
-    hon_field fields[128];
-    uint32_t fcount = parse_fields(p, fields, 128, false);
+    hon_field *fields = NULL;
+    uint32_t fcount = 0;
+    if (!parse_fields(p, &fields, &fcount, false)) return NULL;
 
     t->u.record.field_count = fcount;
-    t->u.record.fields = NULL;
-    if (fcount > 0) {
-        t->u.record.fields = hon_arena_alloc(p->arena,
-            sizeof(hon_field) * fcount, _Alignof(hon_field));
-        memcpy(t->u.record.fields, fields, sizeof(hon_field) * fcount);
-    }
+    t->u.record.fields = fields;
 
     /* Check for variant part */
     if (peek_skip_comments(p).kind == HON_TOK_CASE) {
