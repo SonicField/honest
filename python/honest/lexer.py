@@ -111,6 +111,9 @@ class Lexer:
         while self._pos < len(self._src):
             ch = self._advance()
             text += ch
+            if 0xD800 <= ord(ch) <= 0xDFFF:
+                return Token(TokenKind.ERROR,
+                             "non-scalar Unicode character", line, col)
             if ch == "}":
                 return Token(TokenKind.COMMENT, text, line, col)
         return Token(TokenKind.ERROR, "unterminated { comment", line, col)
@@ -121,6 +124,9 @@ class Lexer:
         while self._pos < len(self._src):
             ch = self._advance()
             text += ch
+            if 0xD800 <= ord(ch) <= 0xDFFF:
+                return Token(TokenKind.ERROR,
+                             "non-scalar Unicode character", line, col)
             if ch == "*" and self._pos < len(self._src) and self._src[self._pos] == ")":
                 text += self._advance()
                 return Token(TokenKind.COMMENT, text, line, col)

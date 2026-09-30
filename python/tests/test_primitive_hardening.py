@@ -124,3 +124,15 @@ def test_declaration_only_rulebook_and_normal_document_remain_valid():
 def test_malformed_or_non_scalar_unicode_escape_rejected(source):
     with pytest.raises(honest.ParseError):
         honest.parse(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{ invalid \ud800 scalar } type N = Integer; var n : N = 1;",
+        "(* invalid \udfff scalar *) type N = Integer; var n : N = 1;",
+    ],
+)
+def test_non_scalar_unicode_in_comments_rejected(source):
+    with pytest.raises(honest.ParseError, match="non-scalar Unicode"):
+        honest.parse_document(source)
