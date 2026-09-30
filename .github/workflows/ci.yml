@@ -56,7 +56,7 @@ jobs:
       EXPECTED_ARCH: ${{ matrix.architecture }}
     steps:
       - name: Check out source
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify runner architecture
         run: test "$(uname -m)" = "$EXPECTED_ARCH"
       - name: Prepare Python test environment
@@ -76,7 +76,7 @@ jobs:
       CC: clang
     steps:
       - name: Check out source
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run sanitizers
         run: make sanitize
       - name: Run bounded coverage-guided parser fuzzing
@@ -88,7 +88,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run GCC analyzer
         run: make analyze ANALYZER_CC=gcc
       - name: Check portable shell scripts
