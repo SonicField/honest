@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 
 /* ---- Value Builder ---- */
 
@@ -257,8 +258,15 @@ static hon_value *build_primitive_value(hon_arena *a, hon_type *type,
             fprintf(stderr, "Invalid real value: '%s'\n", raw);
             return NULL;
         }
+        char *end;
+        errno = 0;
+        double real = strtod(raw, &end);
+        if (errno == ERANGE || *end != '\0' || !isfinite(real)) {
+            fprintf(stderr, "Real value out of range: '%s'\n", raw);
+            return NULL;
+        }
         v->kind = HON_VAL_REAL;
-        v->u.real = strtod(raw, NULL);
+        v->u.real = real;
         return v;
     }
 

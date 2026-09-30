@@ -160,6 +160,11 @@ expect_status 1 "build enforces Byte range" \
     "$bin_dir/honest-build" --type R \
     --typedef 'type R = record x : Byte; end;' x=256
 
+expect_status 1 "build rejects a non-finite Real result" \
+    "$bin_dir/honest-build" --type R \
+    --typedef 'type R = record x : Real; end;' x=1.0e999
+expect_empty_stdout "non-finite Real does not produce a document"
+
 bad_utf8=$'s=\xC0\x80'
 expect_status 1 "build rejects non-canonical UTF-8" \
     "$bin_dir/honest-build" --type R \
