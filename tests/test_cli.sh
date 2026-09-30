@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 bin_dir=${1:-"$root/build"}
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/honest-cli.XXXXXX")
 trap 'rm -rf "$tmp_dir"' EXIT

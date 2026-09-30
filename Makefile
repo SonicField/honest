@@ -1,10 +1,35 @@
-CC      ?= gcc
-CFLAGS  ?= -std=c11 -Wall -Wextra -Wpedantic -O2
-CFLAGS  += -Iinclude
-AR      ?= ar
+CC ?= cc
+AR ?= ar
+INSTALL ?= install
+PYTHON ?= python3
 
-SRCDIR  = src
-INCDIR  = include
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+LIBDIR ?= $(PREFIX)/lib
+INCLUDEDIR ?= $(PREFIX)/include
+DESTDIR ?=
+
+CPPFLAGS ?=
+CFLAGS ?= -O2
+LDFLAGS ?=
+LDLIBS ?=
+
+BASE_CPPFLAGS = -Iinclude
+BASE_CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Werror
+ALL_CPPFLAGS = $(BASE_CPPFLAGS) $(CPPFLAGS)
+ALL_CFLAGS = $(BASE_CFLAGS) $(CFLAGS)
+
+SANITIZERS ?=
+ifneq ($(strip $(SANITIZERS)),)
+ALL_CFLAGS += -fsanitize=$(SANITIZERS) -fno-omit-frame-pointer
+LDFLAGS += -fsanitize=$(SANITIZERS)
+endif
+
+ANALYZER_CC ?= gcc
+ANALYZER_CFLAGS ?= -O0 -g -fanalyzer
+
+SRCDIR = src
+INCDIR = include
 TOOLDIR = tools
 TESTDIR = tests
 BUILDDIR = build
@@ -22,14 +47,8 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c,$(BUILDDIR)/test_%,$(TEST_SRCS))
 
 LIBNAME = libhonest.a
 
-SANITIZE ?=
-
-ifdef SANITIZE
-CFLAGS  += -fsanitize=$(SANITIZE) -fno-omit-frame-pointer -g
-LDFLAGS += -fsanitize=$(SANITIZE)
-endif
-
-.PHONY: all lib tools tests check check-asan check-leak audit clean
+.PHONY: all lib tools tests check python-check conformance test audit \
+	sanitize check-asan check-ubsan check-leak analyze install clean
 
 all: lib tools
 
@@ -41,37 +60,65 @@ tests: lib $(TEST_BINS)
 
 check: tests tools
 	@for t in $(TEST_BINS); do echo "=== $$t ==="; $$t || exit 1; done
-	@echo "All tests passed."
+	bash tests/test_cli.sh "$(CURDIR)/$(BUILDDIR)"
+	@echo "All C and CLI tests passed."
+
+python-check:
+	$(PYTHON) -m pytest python/tests/ -q
+
+conformance: tools
+	PYTHON="$(PYTHON)" bash scripts/cross-impl-conformance.sh
+	PYTHON="$(PYTHON)" bash scripts/cross-impl-conformance-level3.sh
+
+test: check python-check conformance
 
 $(BUILDDIR)/$(LIBNAME): $(LIB_OBJS)
 	$(AR) rcs $@ $^
 
-$(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c $(INCDIR)/honest.h | $(BUILDDIR)
+	$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/%: $(TOOLDIR)/%.c $(TOOL_COMMON) $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $(TOOLDIR)/$*.c $(TOOLDIR)/cli_common.c -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@
+	$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $(TOOLDIR)/$*.c \
+		$(TOOLDIR)/cli_common.c -L$(BUILDDIR) -lhonest \
+		$(LDFLAGS) $(LDLIBS) -o $@
 
 $(BUILDDIR)/test_%: $(TESTDIR)/%.c $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@
+	$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $< -L$(BUILDDIR) -lhonest \
+		$(LDFLAGS) $(LDLIBS) -o $@
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
-audit: check
-	$(MAKE) check-asan
-	python3 -m pytest python/tests/ -v
-	bash scripts/cross-impl-conformance.sh
-	bash scripts/cross-impl-conformance-level3.sh
-	@echo "Full audit passed."
+sanitize:
+	$(MAKE) clean
+	$(MAKE) check CFLAGS='-O1 -g3' SANITIZERS='address,undefined'
 
 check-asan:
 	$(MAKE) clean
-	$(MAKE) check SANITIZE=address
+	$(MAKE) check CFLAGS='-O1 -g3' SANITIZERS='address'
+
+check-ubsan:
+	$(MAKE) clean
+	$(MAKE) check CFLAGS='-O1 -g3' SANITIZERS='undefined'
 
 check-leak:
 	$(MAKE) clean
-	$(MAKE) check SANITIZE=leak
+	$(MAKE) check CFLAGS='-O1 -g3' SANITIZERS='leak'
+
+analyze:
+	$(MAKE) clean
+	$(MAKE) all CC="$(ANALYZER_CC)" CFLAGS="$(ANALYZER_CFLAGS)"
+
+audit: test sanitize analyze
+	@echo "Full audit passed."
+
+install: all
+	$(INSTALL) -d "$(DESTDIR)$(BINDIR)" "$(DESTDIR)$(LIBDIR)" \
+		"$(DESTDIR)$(INCLUDEDIR)"
+	$(INSTALL) -m 0755 $(TOOL_BINS) "$(DESTDIR)$(BINDIR)/"
+	$(INSTALL) -m 0644 "$(BUILDDIR)/$(LIBNAME)" "$(DESTDIR)$(LIBDIR)/$(LIBNAME)"
+	$(INSTALL) -m 0644 "$(INCDIR)/honest.h" "$(DESTDIR)$(INCLUDEDIR)/honest.h"
 
 clean:
 	rm -rf $(BUILDDIR)

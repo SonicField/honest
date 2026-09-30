@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 C_FMT="$PROJECT_DIR/build/honest-fmt"
-PYTHON="python3"
+PYTHON="${PYTHON:-python3}"
 
 if [ ! -x "$C_FMT" ]; then
     echo "ERROR: C tools not built. Run 'make' first." >&2
