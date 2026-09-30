@@ -37,6 +37,7 @@ class Parser:
         self._allow_trailing = allow_trailing
         self._types: dict[str, HonType] = {}
         self._type_list: list[HonType] = []
+        self._declared_names: set[str] = set()
         self._comments: list[str] = []
         self._depth = 0
 
@@ -222,8 +223,16 @@ class Parser:
         name_tok = self._expect(TokenKind.IDENT, "type name")
         name = name_tok.text
 
-        if name in self._types:
+        if name in self._declared_names:
             raise self._error(f"duplicate type name '{name}'", name_tok)
+        if name == "Boolean":
+            raise self._error("reserved type name 'Boolean'", name_tok)
+        if name in PRIMITIVE_NAMES:
+            warnings.warn(
+                f"type '{name}' shadows a primitive type",
+                UserWarning,
+                stacklevel=2,
+            )
 
         self._expect(TokenKind.EQUALS, "type definition")
 
@@ -255,6 +264,7 @@ class Parser:
 
         self._types[name] = typ
         self._type_list.append(typ)
+        self._declared_names.add(name)
         return typ
 
     # ---- Values ----

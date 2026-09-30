@@ -207,6 +207,13 @@ var x : X = 1;
 """)
 
 
+def test_primitive_name_shadowing_is_valid_but_warned():
+    source = "type Integer = String; var value : Integer = 'ok';"
+    with pytest.warns(UserWarning, match="shadows a primitive type"):
+        doc = honest.parse(source)
+    assert doc["value"] == "ok"
+
+
 def test_invalid_enum_value():
     with pytest.raises(honest.ParseError):
         honest.parse("""
