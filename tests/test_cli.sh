@@ -111,6 +111,14 @@ expect_status 1 "build rejects an invalid output variable name" \
     --typedef 'type R = record x : Integer; end;' x=1
 expect_empty_stdout "build emits no document with an invalid variable name"
 
+expect_status 1 "build rejects a leading underscore variable name" \
+    "$bin_dir/honest-build" --type R --var-name _bad \
+    --typedef 'type R = record x : Integer; end;' x=1
+
+expect_status 1 "build rejects a reserved output variable name" \
+    "$bin_dir/honest-build" --type R --var-name type \
+    --typedef 'type R = record x : Integer; end;' x=1
+
 expect_status 1 "build rejects a malformed field path" \
     "$bin_dir/honest-build" --type R \
     --typedef 'type R = record x : Integer; end;' x..ignored=1

@@ -153,8 +153,12 @@ static int is_integer(const char *s) {
 }
 
 static int is_identifier(const char *s) {
+    static const char *const reserved[] = {
+        "type", "record", "end", "case", "of", "sequence", "var",
+        "Boolean", "True", "False",
+    };
     const unsigned char *p = (const unsigned char *)s;
-    if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') || *p == '_'))
+    if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z')))
         return 0;
     p++;
     while (*p) {
@@ -163,6 +167,9 @@ static int is_identifier(const char *s) {
             return 0;
         }
         p++;
+    }
+    for (size_t i = 0; i < sizeof(reserved) / sizeof(reserved[0]); i++) {
+        if (strcmp(s, reserved[i]) == 0) return 0;
     }
     return 1;
 }
