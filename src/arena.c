@@ -25,6 +25,7 @@ struct hon_arena {
 };
 
 static hon_arena_block *block_new(size_t cap) {
+    if (cap > SIZE_MAX - sizeof(hon_arena_block)) return NULL;
     hon_arena_block *b = malloc(sizeof(hon_arena_block) + cap);
     if (!b) return NULL;
     b->next = NULL;
@@ -54,9 +55,13 @@ void *hon_arena_alloc(hon_arena *a, size_t size, size_t align) {
     if (size > SIZE_MAX - padding) return NULL;
     size_t needed = padding + size;
 
-    if (b->used + needed > b->cap) {
-        size_t new_cap = b->cap * 2;
-        if (new_cap < needed) new_cap = needed + ARENA_DEFAULT_CAP;
+    if (b->used > b->cap || needed > b->cap - b->used) {
+        size_t new_cap = b->cap <= SIZE_MAX / 2 ? b->cap * 2 : SIZE_MAX;
+        if (new_cap < needed) {
+            new_cap = needed <= SIZE_MAX - ARENA_DEFAULT_CAP
+                ? needed + ARENA_DEFAULT_CAP
+                : needed;
+        }
         hon_arena_block *nb = block_new(new_cap);
         if (!nb) return NULL;
         b->next    = nb;
@@ -105,6 +110,8 @@ hon_str hon_str_dup(hon_arena *a, hon_str s) {
     /* Always allocate, even for empty strings, so .data is never NULL.
      * This prevents UB from memcmp(NULL, NULL, 0) in hon_str_eq
      * and NULL dereference in printf("%.*s", ...) format strings. */
+    if (s.len == SIZE_MAX || (s.len > 0 && !s.data))
+        return (hon_str){"", 0};
     char *copy = hon_arena_alloc(a, s.len + 1, 1);
     if (!copy) return (hon_str){"", 0};
     if (s.len > 0 && s.data) memcpy(copy, s.data, s.len);

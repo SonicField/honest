@@ -167,7 +167,7 @@ make audit
 ```
 
 This executes:
-1. `make test` — 924 C assertions, 72 CLI checks, 135 Python tests, both
+1. `make test` — 932 C assertions, 72 CLI checks, 135 Python tests, both
    conformance levels, and the 54-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build

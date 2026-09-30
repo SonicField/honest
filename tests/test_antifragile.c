@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 /*
  * Antifragility tests for libhonest.
  *
@@ -10,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 static int tests_run    = 0;
 static int tests_passed = 0;
@@ -37,6 +40,71 @@ static bool has_info(const hon_diag_list *diags) {
         if (diags->items[i].level == HON_DIAG_INFO) return true;
     }
     return false;
+}
+
+static int write_rulebook_fixture(const char *contents, char path[64]) {
+    strcpy(path, "/tmp/honest-rulebook-XXXXXX");
+    int fd = mkstemp(path);
+    if (fd < 0) return -1;
+    FILE *file = fdopen(fd, "w");
+    if (!file) {
+        close(fd);
+        unlink(path);
+        return -1;
+    }
+    int write_failed = fputs(contents, file) == EOF;
+    int close_failed = fclose(file) != 0;
+    if (write_failed || close_failed) {
+        unlink(path);
+        return -1;
+    }
+    return 0;
+}
+
+static void test_registry_load_rejects_invalid_or_data_bearing_files(void) {
+    char invalid_path[64];
+    char document_path[64];
+    ASSERT(write_rulebook_fixture(
+               "type Good = Integer; Broken = ;", invalid_path) == 0,
+           "registry fixture: malformed rulebook written");
+    ASSERT(write_rulebook_fixture(
+               "type Data = Integer; var value : Data = 1;", document_path) == 0,
+           "registry fixture: data-bearing document written");
+
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = hon_registry_new(arena);
+    hon_diag_list diags = {0};
+    int rc = hon_registry_load(reg, invalid_path, &diags);
+    ASSERT(rc == -1, "registry rejects a rulebook with parse errors");
+    ASSERT(hon_registry_lookup(reg, HON_STR_LIT("Good")) == NULL,
+           "failed rulebook load leaves registry unchanged");
+    hon_diag_free(&diags);
+
+    diags = (hon_diag_list){0};
+    rc = hon_registry_load(reg, document_path, &diags);
+    ASSERT(rc == -1, "registry rejects a file containing data");
+    ASSERT(has_errors(&diags), "data-bearing rulebook reports an error");
+    hon_diag_free(&diags);
+
+    unlink(invalid_path);
+    unlink(document_path);
+    hon_arena_free(arena);
+}
+
+static void test_registry_does_not_publish_failed_type_copies(void) {
+    hon_arena *arena = hon_arena_new(0);
+    hon_registry *reg = hon_registry_new(arena);
+    hon_type invalid = {
+        .kind = HON_TYPE_ENUM,
+        .name = {"X", SIZE_MAX},
+        .u.enumeration = {NULL, 0},
+    };
+
+    hon_registry_extend(reg, &invalid);
+    ASSERT(hon_registry_lookup(reg, HON_STR_LIT("")) == NULL,
+           "failed registry copies do not publish an empty key");
+
+    hon_arena_free(arena);
 }
 
 /*
@@ -530,6 +598,8 @@ static void test_variant_arm_divergence(void) {
 }
 
 int main(void) {
+    test_registry_load_rejects_invalid_or_data_bearing_files();
+    test_registry_does_not_publish_failed_type_copies();
     test_unknown_enum();
     test_unknown_record();
     test_divergent_type();

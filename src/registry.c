@@ -37,73 +37,181 @@ static uint32_t hash_str(hon_str s) {
 
 /* ---- Deep Copy ---- */
 
-static hon_type *deep_copy_type(hon_arena *a, const hon_type *src);
+#define REGISTRY_COPY_MAX_DEPTH 256
 
-static hon_field *deep_copy_fields(hon_arena *a, const hon_field *src, uint32_t count) {
-    if (count == 0 || !src) return NULL;
-    hon_field *dst = hon_arena_alloc(a, sizeof(hon_field) * count, _Alignof(hon_field));
+static hon_type *deep_copy_type(hon_arena *a, const hon_type *src,
+                                uint32_t depth, bool *ok);
+
+static bool array_size(uint32_t count, size_t item_size, size_t *size) {
+    if (count > 0 && item_size > SIZE_MAX / count) return false;
+    *size = (size_t)count * item_size;
+    return true;
+}
+
+static bool deep_copy_str(hon_arena *a, hon_str src, hon_str *dst) {
+    if (!dst || src.len == SIZE_MAX || (src.len > 0 && !src.data)) return false;
+    char *copy = hon_arena_alloc(a, src.len + 1, 1);
+    if (!copy) return false;
+    if (src.len > 0) memcpy(copy, src.data, src.len);
+    copy[src.len] = '\0';
+    *dst = (hon_str){copy, src.len};
+    return true;
+}
+
+static hon_field *deep_copy_fields(hon_arena *a, const hon_field *src,
+                                   uint32_t count, uint32_t depth, bool *ok) {
+    if (count == 0) return NULL;
+    size_t fields_size = 0;
+    if (!src || !array_size(count, sizeof(hon_field), &fields_size)) {
+        *ok = false;
+        return NULL;
+    }
+    hon_field *dst = hon_arena_alloc(a, fields_size,
+                                     _Alignof(hon_field));
+    if (!dst) {
+        *ok = false;
+        return NULL;
+    }
     for (uint32_t i = 0; i < count; i++) {
-        dst[i].name = hon_str_dup(a, src[i].name);
-        dst[i].type = src[i].type ? deep_copy_type(a, src[i].type) : NULL;
+        if (!deep_copy_str(a, src[i].name, &dst[i].name) || !src[i].type) {
+            *ok = false;
+            return NULL;
+        }
+        dst[i].type = deep_copy_type(a, src[i].type, depth + 1, ok);
+        if (!*ok) return NULL;
     }
     return dst;
 }
 
-static hon_type *deep_copy_type(hon_arena *a, const hon_type *src) {
-    if (!src) return NULL;
+static hon_type *deep_copy_type(hon_arena *a, const hon_type *src,
+                                uint32_t depth, bool *ok) {
+    if (!src || depth > REGISTRY_COPY_MAX_DEPTH) {
+        *ok = false;
+        return NULL;
+    }
 
-    /* Don't copy primitives — they're static singletons */
-    if (src->kind == HON_TYPE_PRIMITIVE) return (hon_type *)src;
+    if (src->kind > HON_TYPE_ALIAS) {
+        *ok = false;
+        return NULL;
+    }
 
     hon_type *dst = hon_arena_alloc(a, sizeof(hon_type), _Alignof(hon_type));
+    if (!dst || !deep_copy_str(a, src->name, &dst->name)) {
+        *ok = false;
+        return NULL;
+    }
     dst->kind = src->kind;
-    dst->name = hon_str_dup(a, src->name);
 
     switch (src->kind) {
     case HON_TYPE_ENUM:
         dst->u.enumeration.value_count = src->u.enumeration.value_count;
-        dst->u.enumeration.values = hon_arena_alloc(a,
-            sizeof(hon_str) * src->u.enumeration.value_count, _Alignof(hon_str));
+        if (src->u.enumeration.value_count == 0) {
+            dst->u.enumeration.values = NULL;
+            break;
+        }
+        size_t values_size = 0;
+        if (!src->u.enumeration.values ||
+            !array_size(src->u.enumeration.value_count, sizeof(hon_str),
+                        &values_size)) {
+            *ok = false;
+            return NULL;
+        }
+        dst->u.enumeration.values = hon_arena_alloc(
+            a, values_size, _Alignof(hon_str));
+        if (!dst->u.enumeration.values) {
+            *ok = false;
+            return NULL;
+        }
         for (uint32_t i = 0; i < src->u.enumeration.value_count; i++) {
-            dst->u.enumeration.values[i] = hon_str_dup(a, src->u.enumeration.values[i]);
+            if (!deep_copy_str(a, src->u.enumeration.values[i],
+                               &dst->u.enumeration.values[i])) {
+                *ok = false;
+                return NULL;
+            }
         }
         break;
 
     case HON_TYPE_RECORD:
         dst->u.record.field_count = src->u.record.field_count;
-        dst->u.record.fields = deep_copy_fields(a, src->u.record.fields,
-                                                 src->u.record.field_count);
+        dst->u.record.fields = deep_copy_fields(
+            a, src->u.record.fields, src->u.record.field_count, depth, ok);
+        if (!*ok) return NULL;
         dst->u.record.has_variant = src->u.record.has_variant;
         if (src->u.record.has_variant) {
-            dst->u.record.tag_name = hon_str_dup(a, src->u.record.tag_name);
-            dst->u.record.tag_type = src->u.record.tag_type
-                ? deep_copy_type(a, src->u.record.tag_type) : NULL;
+            if (!deep_copy_str(a, src->u.record.tag_name,
+                               &dst->u.record.tag_name) ||
+                !src->u.record.tag_type) {
+                *ok = false;
+                return NULL;
+            }
+            dst->u.record.tag_type = deep_copy_type(
+                a, src->u.record.tag_type, depth + 1, ok);
+            if (!*ok) return NULL;
             dst->u.record.arm_count = src->u.record.arm_count;
-            dst->u.record.arms = hon_arena_alloc(a,
-                sizeof(hon_variant) * src->u.record.arm_count,
-                _Alignof(hon_variant));
+            if (src->u.record.arm_count == 0) {
+                dst->u.record.arms = NULL;
+                break;
+            }
+            size_t arms_size = 0;
+            if (!src->u.record.arms ||
+                !array_size(src->u.record.arm_count, sizeof(hon_variant),
+                            &arms_size)) {
+                *ok = false;
+                return NULL;
+            }
+            dst->u.record.arms = hon_arena_alloc(
+                a, arms_size, _Alignof(hon_variant));
+            if (!dst->u.record.arms) {
+                *ok = false;
+                return NULL;
+            }
             for (uint32_t i = 0; i < src->u.record.arm_count; i++) {
-                dst->u.record.arms[i].label = hon_str_dup(a, src->u.record.arms[i].label);
-                dst->u.record.arms[i].field_count = src->u.record.arms[i].field_count;
-                dst->u.record.arms[i].fields = deep_copy_fields(a,
-                    src->u.record.arms[i].fields,
-                    src->u.record.arms[i].field_count);
+                if (!deep_copy_str(a, src->u.record.arms[i].label,
+                                   &dst->u.record.arms[i].label)) {
+                    *ok = false;
+                    return NULL;
+                }
+                dst->u.record.arms[i].field_count =
+                    src->u.record.arms[i].field_count;
+                dst->u.record.arms[i].fields = deep_copy_fields(
+                    a, src->u.record.arms[i].fields,
+                    src->u.record.arms[i].field_count, depth, ok);
+                if (!*ok) return NULL;
             }
         }
         break;
 
     case HON_TYPE_SEQUENCE:
-        dst->u.sequence.element_type = src->u.sequence.element_type
-            ? deep_copy_type(a, src->u.sequence.element_type) : NULL;
+        if (!src->u.sequence.element_type) {
+            *ok = false;
+            return NULL;
+        }
+        dst->u.sequence.element_type = deep_copy_type(
+            a, src->u.sequence.element_type, depth + 1, ok);
+        if (!*ok) return NULL;
         break;
 
     case HON_TYPE_ALIAS:
-        dst->u.alias.target = src->u.alias.target
-            ? deep_copy_type(a, src->u.alias.target) : NULL;
+        if (!src->u.alias.target) {
+            *ok = false;
+            return NULL;
+        }
+        dst->u.alias.target = deep_copy_type(
+            a, src->u.alias.target, depth + 1, ok);
+        if (!*ok) return NULL;
         break;
 
     case HON_TYPE_PRIMITIVE:
-        break; /* handled above */
+        if (src->u.prim >= HON_PRIM_COUNT) {
+            *ok = false;
+            return NULL;
+        }
+        dst->u.prim = src->u.prim;
+        break;
+
+    default:
+        *ok = false;
+        return NULL;
     }
 
     return dst;
@@ -120,14 +228,18 @@ hon_registry *hon_registry_new(hon_arena *a) {
     reg->count   = 0;
     reg->entries = hon_arena_alloc(a, sizeof(reg_entry) * reg->cap,
                                    _Alignof(reg_entry));
+    if (!reg->entries) return NULL;
     return reg;
 }
 
-static void registry_grow(hon_registry *reg) {
+static bool registry_grow(hon_registry *reg) {
+    if (reg->cap > UINT32_MAX / 2) return false;
     uint32_t new_cap = reg->cap * 2;
-    reg_entry *new_entries = hon_arena_alloc(reg->arena,
-        sizeof(reg_entry) * new_cap, _Alignof(reg_entry));
-    if (!new_entries) return;
+    size_t entries_size = 0;
+    if (!array_size(new_cap, sizeof(reg_entry), &entries_size)) return false;
+    reg_entry *new_entries = hon_arena_alloc(
+        reg->arena, entries_size, _Alignof(reg_entry));
+    if (!new_entries) return false;
 
     /* Rehash */
     for (uint32_t i = 0; i < reg->cap; i++) {
@@ -140,21 +252,24 @@ static void registry_grow(hon_registry *reg) {
     }
     reg->entries = new_entries;
     reg->cap     = new_cap;
+    return true;
 }
 
-void hon_registry_extend(hon_registry *reg, hon_type *type) {
-    if (!reg || !type) return;
-    if (reg->count * 2 >= reg->cap) registry_grow(reg);
+static bool registry_extend_checked(hon_registry *reg, hon_type *type) {
+    if (!reg || !type) return false;
+    if (reg->count >= reg->cap / 2 && !registry_grow(reg)) return false;
 
     /* Deep-copy type into registry's arena — registry owns its types */
-    hon_type *owned = deep_copy_type(reg->arena, type);
+    bool copy_ok = true;
+    hon_type *owned = deep_copy_type(reg->arena, type, 0, &copy_ok);
+    if (!copy_ok || !owned) return false;
 
     uint32_t idx = hash_str(owned->name) % reg->cap;
     while (reg->entries[idx].occupied) {
         if (hon_str_eq(reg->entries[idx].name, owned->name)) {
             /* Update existing entry */
             reg->entries[idx].type = owned;
-            return;
+            return true;
         }
         idx = (idx + 1) % reg->cap;
     }
@@ -163,6 +278,11 @@ void hon_registry_extend(hon_registry *reg, hon_type *type) {
     reg->entries[idx].type     = owned;
     reg->entries[idx].occupied = true;
     reg->count++;
+    return true;
+}
+
+void hon_registry_extend(hon_registry *reg, hon_type *type) {
+    (void)registry_extend_checked(reg, type);
 }
 
 hon_type *hon_registry_lookup(const hon_registry *reg, hon_str name) {
@@ -178,13 +298,119 @@ hon_type *hon_registry_lookup(const hon_registry *reg, hon_str name) {
     return NULL;
 }
 
-int hon_registry_load(hon_registry *reg, const char *path, hon_diag_list *diags) {
-    hon_document *doc = hon_parse_file(path, diags);
-    if (!doc) return -1;
-
-    for (uint32_t i = 0; i < doc->type_count; i++) {
-        hon_registry_extend(reg, doc->types[i]);
+static bool diagnostics_have_errors(const hon_diag_list *diags) {
+    if (!diags) return false;
+    for (uint32_t i = 0; i < diags->count; i++) {
+        if (diags->items[i].level == HON_DIAG_ERROR) return true;
     }
+    return false;
+}
+
+/* Keep parser diagnostics alive after the document arena is released. */
+static void detach_diagnostics(hon_diag_list *diags) {
+    if (!diags || diags->count == 0 || diags->owns_memory) return;
+
+    hon_diagnostic *items = calloc(diags->count, sizeof(*items));
+    if (!items) {
+        diags->items = NULL;
+        diags->count = 0;
+        diags->cap = 0;
+        return;
+    }
+
+    for (uint32_t i = 0; i < diags->count; i++) {
+        items[i] = diags->items[i];
+        if (diags->items[i].message) {
+            size_t message_len = strlen(diags->items[i].message);
+            char *message = malloc(message_len + 1);
+            if (!message) {
+                for (uint32_t j = 0; j < i; j++) free((void *)items[j].message);
+                free(items);
+                diags->items = NULL;
+                diags->count = 0;
+                diags->cap = 0;
+                return;
+            }
+            memcpy(message, diags->items[i].message, message_len + 1);
+            items[i].message = message;
+        }
+    }
+    diags->items = items;
+    diags->cap = diags->count;
+    diags->owns_memory = true;
+}
+
+int hon_registry_load(hon_registry *reg, const char *path, hon_diag_list *diags) {
+    if (!reg || !path) return -1;
+    hon_diag_list local_diags = {0};
+    hon_diag_list *parse_diags = diags ? diags : &local_diags;
+    hon_document *doc = hon_parse_file(path, parse_diags);
+    if (!doc) {
+        if (!diags) hon_diag_free(&local_diags);
+        return -1;
+    }
+
+    if (doc->var_count > 0) {
+        hon_diag_push(parse_diags, doc->arena, HON_DIAG_ERROR, 0, 0,
+                      "rulebook must not contain variable assignments");
+    }
+    if (diagnostics_have_errors(parse_diags)) {
+        if (diags) detach_diagnostics(diags);
+        hon_doc_free(doc);
+        return -1;
+    }
+
+    /* Stage a replacement table so any allocation failure leaves the
+     * caller-visible registry unchanged. Arena allocations need no rollback. */
+    uint32_t stage_cap = reg->cap;
+    uint64_t maximum_count = (uint64_t)reg->count + doc->type_count;
+    while (maximum_count >= stage_cap / 2) {
+        if (stage_cap > UINT32_MAX / 2) {
+            if (diags) detach_diagnostics(diags);
+            hon_doc_free(doc);
+            return -1;
+        }
+        stage_cap *= 2;
+    }
+
+    size_t stage_size = 0;
+    if (!array_size(stage_cap, sizeof(reg_entry), &stage_size)) {
+        if (diags) detach_diagnostics(diags);
+        hon_doc_free(doc);
+        return -1;
+    }
+    reg_entry *stage_entries = hon_arena_alloc(
+        reg->arena, stage_size, _Alignof(reg_entry));
+    if (!stage_entries) {
+        if (diags) detach_diagnostics(diags);
+        hon_doc_free(doc);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < reg->cap; i++) {
+        if (!reg->entries[i].occupied) continue;
+        uint32_t idx = hash_str(reg->entries[i].name) % stage_cap;
+        while (stage_entries[idx].occupied) idx = (idx + 1) % stage_cap;
+        stage_entries[idx] = reg->entries[i];
+    }
+
+    hon_registry stage = {
+        .arena = reg->arena,
+        .entries = stage_entries,
+        .cap = stage_cap,
+        .count = reg->count,
+    };
+    for (uint32_t i = 0; i < doc->type_count; i++) {
+        if (!registry_extend_checked(&stage, doc->types[i])) {
+            if (diags) detach_diagnostics(diags);
+            hon_doc_free(doc);
+            return -1;
+        }
+    }
+
+    reg->entries = stage.entries;
+    reg->cap = stage.cap;
+    reg->count = stage.count;
 
     /* Safe to free — registry deep-copied all types */
     hon_doc_free(doc);
@@ -322,21 +548,34 @@ static void sha256_final(sha256_ctx *c, uint8_t out[32]) {
 /* ---- Canonical Type Serialisation (for hashing) ---- */
 
 /* Append to a dynamically growing buffer */
-typedef struct { char *data; size_t len; size_t cap; } hashbuf;
+typedef struct { char *data; size_t len; size_t cap; bool failed; } hashbuf;
 
 static int hb_init(hashbuf *b) {
     b->cap = 256;
     b->data = malloc(b->cap);
     b->len = 0;
+    b->failed = b->data == NULL;
     return b->data ? 0 : -1;
 }
 static void hb_free(hashbuf *b) { free(b->data); }
 
 static void hb_append(hashbuf *b, const char *s, size_t n) {
-    while (b->len + n >= b->cap) {
+    if (b->failed || n > SIZE_MAX - b->len) {
+        b->failed = true;
+        return;
+    }
+    size_t needed = b->len + n;
+    while (needed >= b->cap) {
+        if (b->cap > SIZE_MAX / 2) {
+            b->failed = true;
+            return;
+        }
         size_t new_cap = b->cap * 2;
         char *new_data = realloc(b->data, new_cap);
-        if (!new_data) return; /* OOM — hash will be partial but won't crash */
+        if (!new_data) {
+            b->failed = true;
+            return;
+        }
         b->data = new_data;
         b->cap = new_cap;
     }
@@ -431,7 +670,9 @@ int hon_registry_hash(const hon_registry *reg, char out[65]) {
     if (!reg || reg->count == 0 || !out) return -1;
 
     /* Collect entries */
-    hash_entry *entries = malloc(sizeof(hash_entry) * reg->count);
+    size_t entries_size = 0;
+    if (!array_size(reg->count, sizeof(hash_entry), &entries_size)) return -1;
+    hash_entry *entries = malloc(entries_size);
     if (!entries) return -1;
     uint32_t n = 0;
     for (uint32_t i = 0; i < reg->cap; i++) {
@@ -458,6 +699,11 @@ int hon_registry_hash(const hon_registry *reg, char out[65]) {
     for (uint32_t i = 0; i < n; i++) {
         buf.len = 0; /* reset buffer for each type */
         serialise_type_canonical(&buf, entries[i].type);
+        if (buf.failed) {
+            hb_free(&buf);
+            free(entries);
+            return -1;
+        }
         sha256_update(&ctx, buf.data, buf.len);
         sha256_update(&ctx, "\n", 1); /* separator */
     }

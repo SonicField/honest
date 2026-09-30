@@ -35,6 +35,12 @@ static bool has_errors(const hon_diag_list *diags) {
     return false;
 }
 
+static void test_arena_capacity_overflow_rejected(void) {
+    hon_arena *arena = hon_arena_new(SIZE_MAX);
+    ASSERT(arena == NULL, "arena rejects capacity arithmetic overflow");
+    hon_arena_free(arena);
+}
+
 /* ================================================================
  * §2.1 — BOM MUST NOT be present
  * ================================================================ */
@@ -1431,6 +1437,7 @@ static void test_z1_resolve_alias_depth_guard(void) {
 }
 
 int main(void) {
+    test_arena_capacity_overflow_rejected();
     /* §2 — Lexical */
     test_bom_rejection();
     test_brace_comment();
