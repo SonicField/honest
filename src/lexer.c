@@ -168,6 +168,7 @@ static hon_token lex_number(hon_lexer *lex) {
     uint32_t start_col  = lex->col;
     const char *start   = lex->src + lex->pos;
     hon_tok_kind kind    = HON_TOK_INT;
+    bool has_fraction    = false;
 
     if (peek_char(lex) == '-') advance(lex);
 
@@ -178,6 +179,7 @@ static hon_token lex_number(hon_lexer *lex) {
     /* Check for real literal */
     if (peek_char(lex) == '.' && isdigit((unsigned char)peek_char_at(lex, 1))) {
         kind = HON_TOK_REAL;
+        has_fraction = true;
         advance(lex); /* skip . */
         while (!at_end(lex) && isdigit((unsigned char)peek_char(lex))) {
             advance(lex);
@@ -195,6 +197,10 @@ static hon_token lex_number(hon_lexer *lex) {
         }
         while (!at_end(lex) && isdigit((unsigned char)peek_char(lex))) {
             advance(lex);
+        }
+        if (!has_fraction) {
+            size_t len = (size_t)(lex->src + lex->pos - start);
+            return make_token(HON_TOK_ERROR, start, len, start_line, start_col);
         }
     }
 

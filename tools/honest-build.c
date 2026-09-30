@@ -191,7 +191,7 @@ static int is_real(const char *s) {
             if (*s == '+' || *s == '-') s++;
             if (!*s || !isdigit((unsigned char)*s)) return 0;
             while (*s && isdigit((unsigned char)*s)) s++;
-            return *s == '\0';
+            return has_dot && *s == '\0';
         } else if (isdigit((unsigned char)*s)) {
             has_digit = 1;
         } else {
@@ -254,7 +254,7 @@ static hon_value *build_primitive_value(hon_arena *a, hon_type *type,
     }
 
     case HON_PRIM_REAL: {
-        if (!is_real(raw) && !is_integer(raw)) {
+        if (!is_real(raw)) {
             fprintf(stderr, "Invalid real value: '%s'\n", raw);
             return NULL;
         }

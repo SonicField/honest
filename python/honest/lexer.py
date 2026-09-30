@@ -190,6 +190,7 @@ class Lexer:
         """Read an integer or real literal."""
         start = self._pos - 1  # already consumed first char
         is_real = False
+        has_fraction = False
 
         while self._pos < len(self._src) and _is_ascii_digit(self._src[self._pos]):
             self._advance()
@@ -198,6 +199,7 @@ class Lexer:
         if (self._pos < len(self._src) and self._src[self._pos] == "." and
                 self._pos + 1 < len(self._src) and _is_ascii_digit(self._src[self._pos + 1])):
             is_real = True
+            has_fraction = True
             self._advance()  # consume '.'
             while self._pos < len(self._src) and _is_ascii_digit(self._src[self._pos]):
                 self._advance()
@@ -213,6 +215,9 @@ class Lexer:
                 return Token(TokenKind.ERROR, text, line, col)
             while self._pos < len(self._src) and _is_ascii_digit(self._src[self._pos]):
                 self._advance()
+            if not has_fraction:
+                text = self._src[start:self._pos]
+                return Token(TokenKind.ERROR, text, line, col)
 
         text = self._src[start:self._pos]
         return Token(TokenKind.REAL if is_real else TokenKind.INT, text, line, col)

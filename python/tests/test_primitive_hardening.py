@@ -52,7 +52,7 @@ def test_integer_out_of_range_or_malformed_rejected(name, literal):
 @pytest.mark.parametrize(
     "literal",
     [
-        "1e", "1e+", "1e-", "1.", ".1", "NaN", "inf", "-inf",
+        "1", "1e", "1e+", "1e-", "1e2", "1.", ".1", "NaN", "inf", "-inf",
         "1.0e999", "-1.0e999", "1.0x",
     ],
 )

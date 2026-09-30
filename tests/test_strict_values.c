@@ -104,7 +104,7 @@ static void test_real_boundaries(void) {
         "0.0", "-1.5", "1.0e+10", "1.7976931348623157e308",
     };
     static const char *const invalid[] = {
-        "1e", "1e+", "1e-", "1.", ".1", "NaN", "inf", "-inf",
+        "1", "1e", "1e+", "1e-", "1e2", "1.", ".1", "NaN", "inf", "-inf",
         "1.0e999", "-1.0e999", "1.0x",
     };
 

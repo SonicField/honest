@@ -165,6 +165,16 @@ expect_status 1 "build rejects a non-finite Real result" \
     --typedef 'type R = record x : Real; end;' x=1.0e999
 expect_empty_stdout "non-finite Real does not produce a document"
 
+expect_status 1 "build enforces Real literal grammar" \
+    "$bin_dir/honest-build" --type R \
+    --typedef 'type R = record x : Real; end;' x=1e2
+expect_empty_stdout "malformed Real does not produce a document"
+
+expect_status 1 "build requires a decimal point for Real" \
+    "$bin_dir/honest-build" --type R \
+    --typedef 'type R = record x : Real; end;' x=1
+expect_empty_stdout "integer spelling of Real does not produce a document"
+
 bad_utf8=$'s=\xC0\x80'
 expect_status 1 "build rejects non-canonical UTF-8" \
     "$bin_dir/honest-build" --type R \

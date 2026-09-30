@@ -297,8 +297,8 @@ class Parser:
             return HonValue(kind=ValueKind.INT, type=typ, integer=value)
 
         if prim == Primitive.REAL:
-            if t.kind not in (TokenKind.REAL, TokenKind.INT):
-                raise self._error(f"expected number, got {t.kind.name}", t)
+            if t.kind != TokenKind.REAL:
+                raise self._error(f"expected real, got {t.kind.name}", t)
             try:
                 value = float(t.text)
             except (ValueError, OverflowError) as exc:

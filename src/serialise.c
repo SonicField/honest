@@ -208,8 +208,14 @@ static void serialise_value(outbuf *b, const hon_value *v) {
         break;
 
     case HON_VAL_REAL:
-        buf_printf(b, "%.17g", v->u.real);
+    {
+        char real[32];
+        snprintf(real, sizeof(real), "%.17g", v->u.real);
+        buf_str(b, real);
+        if (!strchr(real, '.') && !strchr(real, 'e') && !strchr(real, 'E'))
+            buf_str(b, ".0");
         break;
+    }
 
     case HON_VAL_CHAR:
         buf_char(b, '\'');

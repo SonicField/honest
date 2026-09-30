@@ -707,9 +707,9 @@ static hon_value *parse_value(parser *p, hon_type *type) {
             break;
 
         case HON_PRIM_REAL:
-            if (t.kind != HON_TOK_REAL && t.kind != HON_TOK_INT) {
+            if (t.kind != HON_TOK_REAL) {
                 hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
-                              t.line, t.col, "expected numeric literal");
+                              t.line, t.col, "expected real literal");
                 val = NULL;
             } else {
                 val->kind = HON_VAL_REAL;

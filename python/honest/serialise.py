@@ -31,7 +31,10 @@ def _escape_string(s: str) -> str:
 def _serialise_real(value: float | None) -> str:
     if value is None or not math.isfinite(value):
         raise ValueError("Real value must be finite")
-    return f"{value:.17g}"
+    rendered = f"{value:.17g}"
+    if not any(marker in rendered for marker in ".eE"):
+        rendered += ".0"
+    return rendered
 
 
 def _serialise_char(codepoint: int | None) -> str:
