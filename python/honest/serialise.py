@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .types import (
     Document, HonType, HonValue, TypeKind, ValueKind, Primitive, Variable,
 )
@@ -24,6 +26,20 @@ def _escape_string(s: str) -> str:
         else:
             result.append(ch)
     return "".join(result)
+
+
+def _serialise_real(value: float | None) -> str:
+    if value is None or not math.isfinite(value):
+        raise ValueError("Real value must be finite")
+    return f"{value:.17g}"
+
+
+def _serialise_char(codepoint: int | None) -> str:
+    if (codepoint is None or isinstance(codepoint, bool) or
+            codepoint < 0 or codepoint > 0x10FFFF or
+            0xD800 <= codepoint <= 0xDFFF):
+        raise ValueError("Char value must be a valid Unicode scalar")
+    return f"'{_escape_string(chr(codepoint))}'"
 
 
 def serialise(doc: Document, wire: bool = False) -> str:
@@ -141,9 +157,9 @@ def _serialise_value(v: HonValue, parts: list[str], indent: int):
     elif v.kind == ValueKind.INT:
         parts.append(str(v.integer))
     elif v.kind == ValueKind.REAL:
-        parts.append(f"{v.real:.17g}")
+        parts.append(_serialise_real(v.real))
     elif v.kind == ValueKind.CHAR:
-        parts.append(f"'{chr(v.character)}'")
+        parts.append(_serialise_char(v.character))
     elif v.kind == ValueKind.STRING:
         parts.append(f"'{_escape_string(v.string)}'")
     elif v.kind == ValueKind.ENUM:
@@ -192,9 +208,9 @@ def _serialise_value_wire(v: HonValue, parts: list[str]):
     elif v.kind == ValueKind.INT:
         parts.append(str(v.integer))
     elif v.kind == ValueKind.REAL:
-        parts.append(f"{v.real:.17g}")
+        parts.append(_serialise_real(v.real))
     elif v.kind == ValueKind.CHAR:
-        parts.append(f"'{chr(v.character)}'")
+        parts.append(_serialise_char(v.character))
     elif v.kind == ValueKind.STRING:
         parts.append(f"'{_escape_string(v.string)}'")
     elif v.kind == ValueKind.ENUM:
