@@ -109,3 +109,18 @@ def test_declaration_only_rulebook_and_normal_document_remain_valid():
     assert not rulebook.vars
     document = honest.parse("type N = Integer; var n : N = 1;")
     assert document["n"] == 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "type S = String; var value : S = '\\uZZZZ';",
+        "type S = String; var value : S = '\\u12';",
+        "type S = String; var value : S = '\\uD800';",
+        "type S = String; var value : S = '\\U00110000';",
+        "type C = Char; var value : C = '\\uD800';",
+    ],
+)
+def test_malformed_or_non_scalar_unicode_escape_rejected(source):
+    with pytest.raises(honest.ParseError):
+        honest.parse(source)

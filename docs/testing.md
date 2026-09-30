@@ -17,7 +17,7 @@ Or run each verification step individually:
 make check                                    # C suites and black-box CLI checks
 make sanitize                                 # C/CLI tests under ASan and UBSan
 make analyze                                  # GCC static analysis build
-python3 -m pytest python/tests/ -v            # Python tests (120 tests)
+python3 -m pytest python/tests/ -v            # Python tests (133 tests)
 bash scripts/cross-impl-conformance.sh        # Cross-impl conformance (L1+L2)
 bash scripts/cross-impl-conformance-level3.sh # Cross-impl conformance (L3)
 bash scripts/cross-impl-boundaries.sh         # Shared valid/invalid boundary corpus
@@ -38,7 +38,7 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
 | Parser | `test_parser.c` | 130 | Type declarations, data values, schema validation, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
-| Strict values | `test_strict_values.c` | 224 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
+| Strict values | `test_strict_values.c` | 233 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
 | Tools | `test_tools.c` | 61 | CLI integration for get, build, and extract |
 
 `tests/test_cli.sh` adds black-box contract checks for all five installed
@@ -85,7 +85,7 @@ static void test_my_feature(void) {
 
 ## Python Tests
 
-Python tests live in `python/tests/` and currently contain 120 cases.
+Python tests live in `python/tests/` and currently contain 133 cases.
 
 ```bash
 python3 -m pytest python/tests/ -v          # all tests, verbose
@@ -167,7 +167,7 @@ make audit
 ```
 
 This executes:
-1. `make test` — 911 C assertions, 72 CLI checks, 120 Python tests, both
+1. `make test` — 920 C assertions, 72 CLI checks, 133 Python tests, both
    conformance levels, and the 54-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build

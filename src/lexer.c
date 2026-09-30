@@ -125,6 +125,13 @@ static hon_token lex_paren_star_comment(hon_lexer *lex) {
                       start, len, start_line, start_col);
 }
 
+static int hex_digit_value(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
 static hon_token lex_string(hon_lexer *lex) {
     uint32_t start_line = lex->line;
     uint32_t start_col  = lex->col;
@@ -147,7 +154,31 @@ static hon_token lex_string(hon_lexer *lex) {
         }
         if (c == '\\') {
             advance(lex); /* skip \ */
-            if (!at_end(lex)) advance(lex); /* skip escaped char */
+            if (at_end(lex)) {
+                size_t len = (size_t)(lex->src + lex->pos - start);
+                return make_token(HON_TOK_ERROR, start, len, start_line, start_col);
+            }
+            char escape = advance(lex);
+            if (escape == 'u' || escape == 'U') {
+                int digits = escape == 'u' ? 4 : 8;
+                uint32_t codepoint = 0;
+                for (int i = 0; i < digits; i++) {
+                    int digit = hex_digit_value(peek_char(lex));
+                    if (digit < 0) {
+                        size_t len = (size_t)(lex->src + lex->pos - start);
+                        return make_token(HON_TOK_ERROR, start, len,
+                                          start_line, start_col);
+                    }
+                    codepoint = (codepoint << 4) | (uint32_t)digit;
+                    advance(lex);
+                }
+                if ((codepoint >= 0xD800 && codepoint <= 0xDFFF) ||
+                    codepoint > 0x10FFFF) {
+                    size_t len = (size_t)(lex->src + lex->pos - start);
+                    return make_token(HON_TOK_ERROR, start, len,
+                                      start_line, start_col);
+                }
+            }
             continue;
         }
         /* Reject control characters inside strings (except tab) */

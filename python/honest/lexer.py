@@ -152,33 +152,35 @@ class Lexer:
                     elif esc == "u":
                         # \uXXXX
                         hex_str = self._src[self._pos:self._pos + 4]
-                        if len(hex_str) == 4:
-                            try:
-                                cp = int(hex_str, 16)
-                                result.append(chr(cp))
-                                for _ in range(4):
-                                    self._advance()
-                            except ValueError:
-                                result.append("\\u" + hex_str)
-                        else:
-                            result.append("\\u")
+                        if len(hex_str) != 4 or any(
+                                ch not in "0123456789abcdefABCDEF" for ch in hex_str):
+                            return Token(TokenKind.ERROR, "invalid \\u escape", line, col)
+                        cp = int(hex_str, 16)
+                        if 0xD800 <= cp <= 0xDFFF:
+                            return Token(TokenKind.ERROR,
+                                         "Unicode escape is not a scalar", line, col)
+                        result.append(chr(cp))
+                        for _ in range(4):
+                            self._advance()
                     elif esc == "U":
                         # \UXXXXXXXX
                         hex_str = self._src[self._pos:self._pos + 8]
-                        if len(hex_str) == 8:
-                            try:
-                                cp = int(hex_str, 16)
-                                result.append(chr(cp))
-                                for _ in range(8):
-                                    self._advance()
-                            except ValueError:
-                                result.append("\\U" + hex_str)
-                        else:
-                            result.append("\\U")
+                        if len(hex_str) != 8 or any(
+                                ch not in "0123456789abcdefABCDEF" for ch in hex_str):
+                            return Token(TokenKind.ERROR, "invalid \\U escape", line, col)
+                        cp = int(hex_str, 16)
+                        if cp > 0x10FFFF or 0xD800 <= cp <= 0xDFFF:
+                            return Token(TokenKind.ERROR,
+                                         "Unicode escape is not a scalar", line, col)
+                        result.append(chr(cp))
+                        for _ in range(8):
+                            self._advance()
                     else:
                         result.append("\\" + esc)
                 else:
                     result.append("\\")
+            elif 0xD800 <= ord(ch) <= 0xDFFF:
+                return Token(TokenKind.ERROR, "non-scalar Unicode character", line, col)
             elif ord(ch) < 0x20 and ch != '\t':
                 return Token(TokenKind.ERROR,
                              f"control character U+{ord(ch):04X} in string", line, col)
@@ -250,6 +252,9 @@ class Lexer:
 
         line, col = self._line, self._col
         ch = self._advance()
+
+        if 0xD800 <= ord(ch) <= 0xDFFF:
+            return Token(TokenKind.ERROR, "non-scalar Unicode character", line, col)
 
         # Single-character tokens
         if ch == "(":

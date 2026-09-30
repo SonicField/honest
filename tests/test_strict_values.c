@@ -177,6 +177,40 @@ static void test_char_scalars(void) {
     }
 }
 
+static void test_string_unicode_escapes(void) {
+    static const char *const invalid[] = {
+        "type S = String; var value : S = '\\uZZZZ';",
+        "type S = String; var value : S = '\\u12';",
+        "type S = String; var value : S = '\\uD800';",
+        "type S = String; var value : S = '\\U00110000';",
+    };
+
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
+        expect_rejected(invalid[i], strlen(invalid[i]),
+                        "malformed or non-scalar Unicode escape rejected");
+
+    hon_document *doc = expect_valid(
+        "type S = String; var value : S = '\\u0000\\u001F';",
+        "escaped control scalars parse");
+    if (doc) {
+        hon_str value = doc->vars[0].value->u.string;
+        ASSERT(value.len == 2, "escaped controls retain their length");
+        ASSERT(value.data[0] == '\0' && value.data[1] == 0x1F,
+               "escaped controls retain their values");
+        size_t wire_len = 0;
+        char *wire = hon_serialise(doc, HON_MODE_WIRE, &wire_len);
+        ASSERT(wire && strstr(wire, "\\u0000\\u001F"),
+               "escaped controls remain escaped when serialised");
+        hon_diag_list again_diags = {0};
+        hon_document *again = wire ? hon_parse(wire, wire_len, &again_diags) : NULL;
+        ASSERT(again && !has_level(&again_diags, HON_DIAG_ERROR),
+               "escaped controls round-trip");
+        release_parse(again, &again_diags);
+        free(wire);
+        hon_doc_free(doc);
+    }
+}
+
 static void test_invalid_utf8_contexts(void) {
     static const unsigned char *const invalid[] = {
         (const unsigned char *)"\x80",
@@ -298,6 +332,7 @@ int main(void) {
     test_integer_boundaries();
     test_real_boundaries();
     test_char_scalars();
+    test_string_unicode_escapes();
     test_invalid_utf8_contexts();
     test_record_and_variant_schema();
     test_nonempty_declarations();

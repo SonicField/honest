@@ -23,6 +23,10 @@ def _escape_string(s: str) -> str:
             result.append("\\r")
         elif ch == "\t":
             result.append("\\t")
+        elif ord(ch) < 0x20:
+            result.append(f"\\u{ord(ch):04X}")
+        elif 0xD800 <= ord(ch) <= 0xDFFF:
+            raise ValueError("String value must contain only Unicode scalars")
         else:
             result.append(ch)
     return "".join(result)
