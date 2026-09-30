@@ -34,6 +34,7 @@ def test_variant_definition_validation():
         honest.parse(source)
 
     invalid = [
+        "type K = (A); R = record case kind : K of end; var r : R = (kind : A);",
         "type R = record case kind : Integer of A : (); end; var r : R = (kind : 1);",
         "type R = record case kind : String of A : (); end; var r : R = (kind : A);",
         "type K = record end; R = record case kind : K of A : (); end; var r : R = (kind : A);",

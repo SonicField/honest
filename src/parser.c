@@ -473,6 +473,13 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
     rec->u.record.arm_count = arm_count;
     rec->u.record.arms = arms;
 
+    if (arm_count == 0) {
+        hon_token end = peek_skip_comments(p);
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      end.line, end.col,
+                      "variant part requires at least one arm");
+    }
+
     uint32_t legal_value_count = bool_tag ? 2u :
         (enum_tag ? resolved_tag->u.enumeration.value_count : 0u);
     if (arm_count < legal_value_count) {

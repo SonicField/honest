@@ -96,6 +96,7 @@ done
 
 invalid_documents=(
     "type E = (A, A); var value : E = A;"
+    "type K = (A); R = record case kind : K of end; var value : R = (kind : A);"
     "type T = Byte; var value : T = 256;"
     "type T = Word; var value : T = 65536;"
     "type T = Integer; var value : T = 2147483648;"

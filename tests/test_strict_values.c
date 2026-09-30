@@ -265,6 +265,7 @@ static void test_record_and_variant_schema(void) {
         "type R = record x : Integer; y : String; end; var r : R = (x : 7; y : 'ok'; z : 1);",
     };
     static const char *const invalid_variants[] = {
+        "type K = (A); R = record case kind : K of end; var r : R = (kind : A);",
         "type R = record case kind : Integer of A : (); end; var r : R = (kind : 1);",
         "type R = record case kind : String of A : (); end; var r : R = (kind : A);",
         "type K = record end; R = record case kind : K of A : (); end; var r : R = (kind : A);",

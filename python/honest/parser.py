@@ -166,6 +166,9 @@ class Parser:
             self._expect(TokenKind.OF, "variant")
 
             arms = []
+            if self._peek().kind == TokenKind.END:
+                raise self._error(
+                    "variant part requires at least one arm", self._peek())
             while self._peek().kind != TokenKind.END:
                 # Variant labels can be identifiers, True, or False
                 label_tok = self._next()
