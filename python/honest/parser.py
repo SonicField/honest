@@ -77,6 +77,13 @@ class Parser:
     def _error(self, msg: str, tok: Token) -> ParseError:
         return ParseError(msg, tok.line, tok.col)
 
+    def _reject_reserved_boolean_name(self, tok: Token, context: str) -> None:
+        # Other reserved words have dedicated token kinds. Boolean remains an
+        # identifier token because it is also a legal type reference.
+        if tok.text == "Boolean":
+            raise self._error(
+                f"reserved name 'Boolean' cannot be used as {context}", tok)
+
     # ---- Type Declarations ----
 
     def _parse_enum(self, name: str) -> HonType:
@@ -85,6 +92,7 @@ class Parser:
         values = []
         while True:
             t = self._expect(TokenKind.IDENT, "enum value")
+            self._reject_reserved_boolean_name(t, "an enumeration value")
             if t.text in values:
                 raise self._error(
                     f"duplicate enumeration value '{t.text}'", t)
@@ -111,6 +119,7 @@ class Parser:
                 break
 
             name_tok = self._expect(TokenKind.IDENT, "field name")
+            self._reject_reserved_boolean_name(name_tok, "a field name")
             self._expect(TokenKind.COLON, "field")
             type_tok = self._expect(TokenKind.IDENT, "field type")
 
@@ -146,6 +155,7 @@ class Parser:
             has_variant = True
 
             tag_tok = self._expect(TokenKind.IDENT, "variant tag name")
+            self._reject_reserved_boolean_name(tag_tok, "a field name")
             tag_name = tag_tok.text
             self._expect(TokenKind.COLON, "variant tag")
             type_tok = self._expect(TokenKind.IDENT, "variant tag type")

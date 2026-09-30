@@ -145,6 +145,17 @@ static hon_token expect_skip(parser *p, hon_tok_kind kind) {
     return t;
 }
 
+/* Other reserved words have dedicated token kinds. Boolean remains an
+ * identifier token because it is also a legal type reference. */
+static void reject_reserved_boolean_name(parser *p, hon_token token,
+                                         const char *context) {
+    if (hon_str_eq(token.text, HON_STR_LIT("Boolean"))) {
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      token.line, token.col,
+                      "reserved name 'Boolean' cannot be used as %s", context);
+    }
+}
+
 /* ---- Primitive Type Registry ---- */
 
 static hon_type primitive_types[HON_PRIM_COUNT];
@@ -232,6 +243,7 @@ static hon_type *parse_enum(parser *p, hon_str name) {
     for (;;) {
         hon_token val = expect_skip(p, HON_TOK_IDENT);
         if (val.kind == HON_TOK_ERROR) return NULL;
+        reject_reserved_boolean_name(p, val, "an enumeration value");
 
         /* Check for duplicate enum value */
         for (uint32_t i = 0; i < count; i++) {
@@ -303,6 +315,7 @@ static bool parse_fields(parser *p, hon_field **out_fields,
             break;
 
         hon_token name_tok = next_skip_comments(p);
+        reject_reserved_boolean_name(p, name_tok, "a field name");
         hon_token colon = peek_skip_comments(p);
         if (colon.kind != HON_TOK_COLON) {
             /* Not a field — push back by reporting error */
@@ -367,6 +380,7 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
 
     hon_token tag_name = expect_skip(p, HON_TOK_IDENT);
     if (tag_name.kind == HON_TOK_ERROR) return false;
+    reject_reserved_boolean_name(p, tag_name, "a field name");
 
     expect_skip(p, HON_TOK_COLON);
 

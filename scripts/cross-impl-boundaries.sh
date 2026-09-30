@@ -96,6 +96,10 @@ done
 
 invalid_documents=(
     "type E = (A, A); var value : E = A;"
+    "type E = (Boolean); var value : E = Boolean;"
+    "type R = record Boolean : Integer; end; var value : R = (Boolean : 1);"
+    "type E = (A); R = record case Boolean : E of A : (); end; var value : R = (Boolean : A);"
+    "type E = (A); R = record case kind : E of A : (Boolean : Integer); end; var value : R = (kind : A; Boolean : 1);"
     "type K = (A); R = record case kind : K of end; var value : R = (kind : A);"
     "type T = Byte; var value : T = 256;"
     "type T = Word; var value : T = 65536;"

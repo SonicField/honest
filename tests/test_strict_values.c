@@ -257,6 +257,10 @@ static void test_invalid_utf8_contexts(void) {
 
 static void test_record_and_variant_schema(void) {
     static const char *const invalid_records[] = {
+        "type E = (Boolean); var e : E = Boolean;",
+        "type R = record Boolean : Integer; end; var r : R = (Boolean : 1);",
+        "type E = (A); R = record case Boolean : E of A : (); end; var r : R = (Boolean : A);",
+        "type E = (A); R = record case kind : E of A : (Boolean : Integer); end; var r : R = (kind : A; Boolean : 1);",
         "type R = record x : Integer; y : String; end; var r : R = (wrong : 7; y : 'ok');",
         "type R = record x : Integer; y : String; end; var r : R = (x : 7);",
         "type R = record x : Integer; y : String; end; var r : R = (y : 'ok'; x : 7);",
