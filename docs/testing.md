@@ -17,10 +17,13 @@ Or run each verification step individually:
 make check                                    # C suites and black-box CLI checks
 make sanitize                                 # C/CLI tests under ASan and UBSan
 make analyze                                  # GCC static analysis build
-python3 -m pytest python/tests/ -v            # Python tests (135 tests)
+python3 -m pytest python/tests/ -v            # Python tests (143 tests)
 bash scripts/cross-impl-conformance.sh        # Cross-impl conformance (L1+L2)
 bash scripts/cross-impl-conformance-level3.sh # Cross-impl conformance (L3)
 bash scripts/cross-impl-boundaries.sh         # Shared valid/invalid boundary corpus
+make generated-conformance                    # 960 deterministic generated checks
+make fuzz-random                              # 20,000 sanitizer-backed mutations
+make fuzz-smoke                               # 10,000 coverage-guided libFuzzer runs
 make install-check                            # Staged CLI/library/header smoke test
 ```
 
@@ -85,7 +88,7 @@ static void test_my_feature(void) {
 
 ## Python Tests
 
-Python tests live in `python/tests/` and currently contain 135 cases.
+Python tests live in `python/tests/` and currently contain 143 cases.
 
 ```bash
 python3 -m pytest python/tests/ -v          # all tests, verbose
@@ -153,8 +156,19 @@ PYTHON=/path/to/venv/bin/python bash scripts/cross-impl-boundaries.sh
 The committed corpus covers every integer boundary, escaped and supplementary
 `Char` values, Unicode strings, fixed records, and enum/Boolean variants. It
 also presents the same malformed numeric, identifier, record, variant, and
-empty-declaration cases to both parsers. The current corpus performs 54 checks,
+empty-declaration cases to both parsers. The current corpus performs 66 checks,
 including mutual parsing, byte-identical wire output, and idempotence.
+
+### Generated and fuzz testing
+
+`make generated-conformance` deterministically creates 64 varied valid
+documents and rulebooks plus 64 invalid schemata. It performs 960 acceptance,
+rejection, cross-parser, canonical-wire, and idempotence checks.
+
+`make fuzz-random` runs 20,000 deterministic mutations through the diagnostic
+and strict C parser entry points under ASan and UBSan. `make fuzz-smoke`
+builds the same harness with Clang libFuzzer and performs bounded,
+coverage-guided fuzzing; CI runs 25,000 iterations.
 
 ---
 
@@ -167,9 +181,10 @@ make audit
 ```
 
 This executes:
-1. `make test` — 941 C assertions, 76 CLI checks, 138 Python tests, both
-   conformance levels, and the 66-check boundary corpus
+1. `make test` — 941 C assertions, 76 CLI checks, 143 Python tests, both
+   conformance levels, the 66-check boundary corpus, and 960 generated checks
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build
+4. `make fuzz-random` — 20,000 deterministic parser mutations under sanitizers
 
 If any step fails, the audit stops immediately. A successful run prints `Full audit passed.`

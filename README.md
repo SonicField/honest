@@ -217,11 +217,12 @@ The format specification and both reference implementations are complete.
 | NBS standard types | Complete |
 | Examples | Complete |
 | C library (libhonest) | Complete — 941 assertions locally green |
-| Python library | Complete — 138 tests locally green |
+| Python library | Complete — 143 tests locally green |
 | CLI tools | Complete — 76 black-box checks locally green |
-| Cross-impl conformance | Complete — 6 shipped fixtures plus 66 boundary checks locally green |
+| Cross-impl conformance | Complete — 6 fixtures, 66 boundary checks, and 960 generated checks locally green |
 
-The C assertions are supplemented by black-box checks of all five executables.
+The C assertions are supplemented by black-box checks of all five executables,
+deterministic mutation fuzzing, and a coverage-guided libFuzzer CI smoke run.
 ASan/UBSan and GCC static analysis are clean on the local Linux ARM64 host.
 The configured CI matrix covers Linux and macOS on x86-64 and ARM64; those
 hosted results must be checked at the release commit. See the

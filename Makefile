@@ -27,6 +27,8 @@ endif
 
 ANALYZER_CC ?= gcc
 ANALYZER_CFLAGS ?= -O0 -g -fanalyzer
+FUZZ_CC ?= clang
+FUZZ_RUNS ?= 10000
 
 SRCDIR = src
 INCDIR = include
@@ -42,13 +44,14 @@ TOOL_MAIN_SRCS = $(filter-out $(TOOLDIR)/cli_common.c,$(TOOL_SRCS))
 TOOL_BINS = $(patsubst $(TOOLDIR)/%.c,$(BUILDDIR)/%,$(TOOL_MAIN_SRCS))
 TOOL_COMMON = $(TOOLDIR)/cli_common.c $(TOOLDIR)/cli_common.h
 
-TEST_SRCS = $(wildcard $(TESTDIR)/*.c)
+TEST_SRCS = $(filter-out $(TESTDIR)/fuzz_parse.c,$(wildcard $(TESTDIR)/*.c))
 TEST_BINS = $(patsubst $(TESTDIR)/%.c,$(BUILDDIR)/test_%,$(TEST_SRCS))
 
 LIBNAME = libhonest.a
 
-.PHONY: all lib tools tests check python-check conformance test audit \
-	sanitize check-asan check-ubsan check-leak analyze install install-check clean
+.PHONY: all lib tools tests check python-check conformance generated-conformance test audit \
+	sanitize check-asan check-ubsan check-leak analyze fuzz-build fuzz-smoke fuzz-random \
+	install install-check clean
 
 all: lib tools
 
@@ -70,6 +73,10 @@ conformance: tools
 	PYTHON="$(PYTHON)" bash scripts/cross-impl-conformance.sh
 	PYTHON="$(PYTHON)" bash scripts/cross-impl-conformance-level3.sh
 	PYTHON="$(PYTHON)" bash scripts/cross-impl-boundaries.sh
+	PYTHONPATH=python $(PYTHON) scripts/generated-conformance.py
+
+generated-conformance: tools
+	PYTHONPATH=python $(PYTHON) scripts/generated-conformance.py
 
 test: check python-check conformance
 
@@ -111,7 +118,28 @@ analyze:
 	$(MAKE) clean
 	$(MAKE) all CC="$(ANALYZER_CC)" CFLAGS="$(ANALYZER_CFLAGS)"
 
-audit: test sanitize analyze
+fuzz-build: $(BUILDDIR)/fuzz_parse
+
+$(BUILDDIR)/fuzz_parse: $(TESTDIR)/fuzz_parse.c $(LIB_SRCS) $(INCDIR)/honest.h | $(BUILDDIR)
+	$(FUZZ_CC) $(BASE_CPPFLAGS) $(BASE_CFLAGS) -O1 -g \
+		-fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer \
+		$(TESTDIR)/fuzz_parse.c $(LIB_SRCS) -o $@
+
+fuzz-smoke: fuzz-build
+	mkdir -p $(BUILDDIR)/fuzz-corpus
+	cp $(TESTDIR)/corpus/valid/*.honest examples/*.honest \
+		$(BUILDDIR)/fuzz-corpus/
+	$(BUILDDIR)/fuzz_parse -runs=$(FUZZ_RUNS) -max_len=4096 \
+		-timeout=5 -artifact_prefix=$(BUILDDIR)/ $(BUILDDIR)/fuzz-corpus
+
+fuzz-random: | $(BUILDDIR)
+	$(CC) $(BASE_CPPFLAGS) $(BASE_CFLAGS) -O1 -g \
+		-DHONEST_FUZZ_STANDALONE -fsanitize=address,undefined \
+		-fno-omit-frame-pointer $(TESTDIR)/fuzz_parse.c $(LIB_SRCS) \
+		-o $(BUILDDIR)/fuzz_parse_random
+	$(BUILDDIR)/fuzz_parse_random
+
+audit: test sanitize analyze fuzz-random
 	@echo "Full audit passed."
 
 install: all
