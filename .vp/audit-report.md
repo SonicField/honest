@@ -142,3 +142,32 @@ current or phrased so normal test growth does not make the documentation false.
 Each behavioural repair requires a test observed failing against the audited
 revision, then passing with the repair. Cross-platform support remains an
 unverified claim until CI runs on the published repository.
+
+## Remediation evidence
+
+The authorised repair work completed locally in these independently reviewable
+commits:
+
+- `bb25223` — enforce CLI input, parse, Unicode, and output contracts;
+- `f0eefc3` — repair the Python PEP 517 build backend;
+- `79ef5ed` — add reproducible test, sanitizer, analyzer, and install targets;
+- `c503bad`, `473e1ae` — validate generated variable identifiers;
+- `671e171` — publish the precise CLI contract and limitations;
+- `6aa0c03` — add the pinned six-platform CI matrix and Dependabot policy.
+
+Final local verification on Linux ARM64 with GCC 11.5 observed:
+
+- `make audit PYTHON=/tmp/honest-vp-venv/bin/python ANALYZER_CC=gcc`: passed;
+- 647/647 C assertions passed in normal and ASan/UBSan builds;
+- 55/55 black-box CLI checks passed in normal and ASan/UBSan builds;
+- 34/34 Python tests passed;
+- both conformance levels passed all 6/6 fixtures;
+- GCC `-fanalyzer` completed with warnings treated as errors;
+- ShellCheck accepted all test and conformance scripts;
+- staged `make install` installed and ran help for all five executables, and
+  installed `libhonest.a` plus `honest.h`;
+- all local Markdown links resolved.
+
+The configured Ubuntu x86-64/ARM64 GCC/Clang and macOS Intel/ARM64 jobs have not
+run because this workstream was not authorised to push. Cross-platform support
+therefore remains configured but externally unverified pending a GitHub CI run.
