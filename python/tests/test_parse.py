@@ -216,6 +216,11 @@ var c : Color = Yellow;
 """)
 
 
+def test_duplicate_enum_value_rejected():
+    with pytest.raises(honest.ParseError, match="duplicate enumeration value"):
+        honest.parse("type E = (A, A); var e : E = A;")
+
+
 def test_missing_type_keyword():
     with pytest.raises(honest.ParseError):
         honest.parse("var x : Integer = 1;\n")

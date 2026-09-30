@@ -84,6 +84,9 @@ class Parser:
         values = []
         while True:
             t = self._expect(TokenKind.IDENT, "enum value")
+            if t.text in values:
+                raise self._error(
+                    f"duplicate enumeration value '{t.text}'", t)
             values.append(t.text)
             p = self._peek()
             if p.kind == TokenKind.COMMA:
