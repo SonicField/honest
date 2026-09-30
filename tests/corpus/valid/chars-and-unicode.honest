@@ -1,0 +1,22 @@
+type
+  Characters = record
+    apostrophe : Char;
+    backslash  : Char;
+    newline    : Char;
+    carriage   : Char;
+    tab        : Char;
+    bmp        : Char;
+    rocket     : Char;
+    text       : String;
+  end;
+
+var characters : Characters = (
+  apostrophe : '''';
+  backslash  : '\\';
+  newline    : '\n';
+  carriage   : '\r';
+  tab        : '\t';
+  bmp        : '\u00E9';
+  rocket     : '\U0001F680';
+  text       : 'naïve 🚀';
+);

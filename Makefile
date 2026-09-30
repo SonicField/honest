@@ -69,6 +69,7 @@ python-check:
 conformance: tools
 	PYTHON="$(PYTHON)" bash scripts/cross-impl-conformance.sh
 	PYTHON="$(PYTHON)" bash scripts/cross-impl-conformance-level3.sh
+	PYTHON="$(PYTHON)" bash scripts/cross-impl-boundaries.sh
 
 test: check python-check conformance
 

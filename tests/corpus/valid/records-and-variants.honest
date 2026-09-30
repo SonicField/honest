@@ -1,0 +1,32 @@
+type
+  Choice = (WithValue, Empty);
+
+  Fixed = record
+    number : Integer;
+    text   : String;
+  end;
+
+  EnumVariant = record
+    common : Fixed;
+    case kind : Choice of
+      WithValue : (amount : LongInt);
+      Empty     : ();
+  end;
+
+  BooleanVariant = record
+    case present : Boolean of
+      True  : (value : String);
+      False : ();
+  end;
+
+var fixed : Fixed = (number : 7; text : 'ok');
+var with_value : EnumVariant = (
+  common : (number : 8; text : 'nested');
+  kind   : WithValue;
+  amount : 9223372036854775807;
+);
+var empty : EnumVariant = (
+  common : (number : 9; text : 'empty arm');
+  kind   : Empty;
+);
+var absent : BooleanVariant = (present : False);

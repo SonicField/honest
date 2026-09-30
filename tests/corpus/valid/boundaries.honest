@@ -1,0 +1,26 @@
+type
+  Limits = record
+    byte_min    : Byte;
+    byte_max    : Byte;
+    word_min    : Word;
+    word_max    : Word;
+    integer_min : Integer;
+    integer_max : Integer;
+    long_min    : LongInt;
+    long_max    : LongInt;
+    real_zero   : Real;
+    real_value  : Real;
+  end;
+
+var limits : Limits = (
+  byte_min    : 0;
+  byte_max    : 255;
+  word_min    : 0;
+  word_max    : 65535;
+  integer_min : -2147483648;
+  integer_max : 2147483647;
+  long_min    : -9223372036854775808;
+  long_max    : 9223372036854775807;
+  real_zero   : 0.0;
+  real_value  : -1.5;
+);
