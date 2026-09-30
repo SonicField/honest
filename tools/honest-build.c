@@ -152,6 +152,21 @@ static int is_integer(const char *s) {
     return 1;
 }
 
+static int is_identifier(const char *s) {
+    const unsigned char *p = (const unsigned char *)s;
+    if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') || *p == '_'))
+        return 0;
+    p++;
+    while (*p) {
+        if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+              (*p >= '0' && *p <= '9') || *p == '_')) {
+            return 0;
+        }
+        p++;
+    }
+    return 1;
+}
+
 /* Check if a string is a valid real number. */
 static int is_real(const char *s) {
     if (!s || !*s) return 0;
@@ -570,6 +585,11 @@ int main(int argc, char **argv) {
     if (!type_name) {
         fprintf(stderr, "Error: --type is required\n");
         usage(stderr, argv[0]);
+        return 1;
+    }
+
+    if (!is_identifier(var_name)) {
+        fprintf(stderr, "Error: invalid variable name '%s'\n", var_name);
         return 1;
     }
 

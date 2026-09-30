@@ -106,6 +106,11 @@ expect_status 1 "build rejects both declaration sources" \
     --typedef 'type R = record x : Integer; end;' x=1
 expect_empty_stdout "build emits no document with conflicting sources"
 
+expect_status 1 "build rejects an invalid output variable name" \
+    "$bin_dir/honest-build" --type R --var-name bad-name \
+    --typedef 'type R = record x : Integer; end;' x=1
+expect_empty_stdout "build emits no document with an invalid variable name"
+
 expect_status 1 "build rejects a malformed field path" \
     "$bin_dir/honest-build" --type R \
     --typedef 'type R = record x : Integer; end;' x..ignored=1
