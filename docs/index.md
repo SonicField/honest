@@ -15,6 +15,7 @@
 
 - **[Implementor's Guide](implementors-guide.md)** — how to build a conformant parser and serialiser
 - **[Testing Guide](testing.md)** — how to run and extend the test suites
+- **[Parser Conformance Matrix](parser-conformance.md)** — normative parser requirements mapped to executable evidence
 
 ## Resources
 

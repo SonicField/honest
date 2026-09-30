@@ -1,4 +1,6 @@
 build/
 .nbs/
+__pycache__/
+*.pyc
 *.o
 *.a

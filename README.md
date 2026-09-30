@@ -216,10 +216,10 @@ The format specification and both reference implementations are complete.
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | Complete — 941 assertions locally green |
-| Python library | Complete — 143 tests locally green |
+| C library (libhonest) | Complete — 952 assertions locally green |
+| Python library | Complete — 148 tests locally green |
 | CLI tools | Complete — 76 black-box checks locally green |
-| Cross-impl conformance | Complete — 6 fixtures, 66 boundary checks, and 960 generated checks locally green |
+| Cross-impl conformance | Complete — 6 fixtures, 82 boundary checks, and 968 generated checks locally green |
 
 The C assertions are supplemented by black-box checks of all five executables,
 deterministic mutation fuzzing, and a coverage-guided libFuzzer CI smoke run.

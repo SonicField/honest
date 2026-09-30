@@ -96,6 +96,7 @@ def invalid_document(index: int) -> str:
     suffix = f"B{index}"
     cases = [
         f"type E{suffix} = (A, A); var x : E{suffix} = A;",
+        f"type N{suffix} = Integer; var x : N{suffix} = 1; var x : N{suffix} = 2;",
         f"type E{suffix} = (); var x : E{suffix} = A;",
         f"type A{suffix} = Integer B{suffix} = String; var x : A{suffix} = 1;",
         f"type A{suffix} = B{suffix}; B{suffix} = Integer; var x : A{suffix} = 1;",
@@ -108,12 +109,14 @@ def invalid_document(index: int) -> str:
         f"type K{suffix} = (A); R{suffix} = record case kind : K{suffix} of Z : (); end; var r : R{suffix} = (kind : A);",
         f"type K{suffix} = (A); R{suffix} = record case kind : K{suffix} of end; var r : R{suffix} = (kind : A);",
         f"type K{suffix} = (A); R{suffix} = record case kind : K{suffix} of A : (); A : (); end; var r : R{suffix} = (kind : A);",
+        f"type K{suffix} = (A); R{suffix} = record x : Integer; case kind : K{suffix} of A : (x : Integer); end; var r : R{suffix} = (x : 1; kind : A; x : 2);",
         f"type K{suffix} = (A); R{suffix} = record case kind : K{suffix} of A : (x : Integer); end; var r : R{suffix} = (kind : A);",
         f"type K{suffix} = (A, B); R{suffix} = record case kind : K{suffix} of A : (x : Integer); B : (); end; var r : R{suffix} = (kind : B; x : 1);",
         f"type T{suffix} = Integer; var x : T{suffix} = 1; trailing",
         f"var x : Integer = 1;",
         f"type T{suffix} = Integer;",
         f"type E{suffix} = (True); var x : E{suffix} = True;",
+        f"type E{suffix} = (Boolean); var x : E{suffix} = Boolean;",
         f"type Café{suffix} = Integer; var x : Integer = 1;",
         f"type S{suffix} = String; var x : S{suffix} = '\\uD800';",
         f"type S{suffix} = sequence of Integer; var x : S{suffix} = (1 2);",
@@ -121,6 +124,18 @@ def invalid_document(index: int) -> str:
         f"type T{suffix} = Integer; T{suffix} = String; var x : T{suffix} = 1;",
     ]
     return cases[index % len(cases)]
+
+
+def nested_document(depth: int) -> str:
+    declarations = ["type", "  R0 = record value : Integer; end;"]
+    for level in range(1, depth):
+        declarations.append(
+            f"  R{level} = record inner : R{level - 1}; end;")
+    value = "(value : 1)"
+    for _ in range(1, depth):
+        value = f"(inner : {value})"
+    declarations.append(f"var root : R{depth - 1} = {value};")
+    return "\n".join(declarations)
 
 
 def run_c(binary: Path, args: list[str], source: str) -> subprocess.CompletedProcess[bytes]:
@@ -149,6 +164,23 @@ def main() -> int:
     checks = 0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
+        special_documents = [
+            "type S = String; var value : S = '" + "x" * 65535 + "';",
+            nested_document(32),
+        ]
+        for source in special_documents:
+            py_doc = honest.parse_document(source)
+            checks += 1
+            c_result = run_c(c_parse, ["--quiet", "--document"], source)
+            require(c_result.returncode == 0,
+                    "C rejected a required valid boundary", source)
+            checks += 1
+            c_wire = run_c(c_fmt, ["--wire"], source)
+            require(c_wire.returncode == 0 and
+                    c_wire.stdout.decode("utf-8") == honest.serialise(py_doc, wire=True),
+                    "implementations diverged at a required valid boundary", source)
+            checks += 1
+
         for index in range(args.cases):
             source = generated_document(index, rng)
             py_doc = honest.parse_document(source)
@@ -225,6 +257,20 @@ def main() -> int:
             c_result = run_c(c_parse, ["--quiet", "--document"], source)
             require(c_result.returncode != 0, "C accepted generated invalid document", source)
             checks += 1
+
+        excessive_nesting = nested_document(65)
+        try:
+            honest.parse_document(excessive_nesting)
+        except honest.ParseError:
+            pass
+        else:
+            require(False, "Python accepted excessive nesting", excessive_nesting)
+        checks += 1
+        c_result = run_c(
+            c_parse, ["--quiet", "--document"], excessive_nesting)
+        require(c_result.returncode != 0,
+                "C accepted excessive nesting", excessive_nesting)
+        checks += 1
 
     print(f"{checks}/{checks} generated cross-implementation checks passed")
     return 0

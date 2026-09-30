@@ -17,11 +17,11 @@ Or run each verification step individually:
 make check                                    # C suites and black-box CLI checks
 make sanitize                                 # C/CLI tests under ASan and UBSan
 make analyze                                  # GCC static analysis build
-python3 -m pytest python/tests/ -v            # Python tests (143 tests)
+python3 -m pytest python/tests/ -v            # Python tests (148 tests)
 bash scripts/cross-impl-conformance.sh        # Cross-impl conformance (L1+L2)
 bash scripts/cross-impl-conformance-level3.sh # Cross-impl conformance (L3)
 bash scripts/cross-impl-boundaries.sh         # Shared valid/invalid boundary corpus
-make generated-conformance                    # 960 deterministic generated checks
+make generated-conformance                    # 968 deterministic generated checks
 make fuzz-random                              # 20,000 sanitizer-backed mutations
 make fuzz-smoke                               # 10,000 coverage-guided libFuzzer runs
 make install-check                            # Staged CLI/library/header smoke test
@@ -39,9 +39,9 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 | Antifragile | `test_antifragile.c` | 83 | Unknown types, rulebook divergence, registry extension |
 | Conformance | `test_conformance.c` | 217 | Round-trip fidelity, canonical form, edge cases |
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
-| Parser | `test_parser.c` | 141 | Type declarations, data values, schema validation, error recovery |
+| Parser | `test_parser.c` | 145 | Type declarations, data values, schema validation, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
-| Strict values | `test_strict_values.c` | 234 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
+| Strict values | `test_strict_values.c` | 241 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
 | Tools | `test_tools.c` | 61 | CLI integration for get, build, and extract |
 
 `tests/test_cli.sh` adds black-box contract checks for all five installed
@@ -88,7 +88,7 @@ static void test_my_feature(void) {
 
 ## Python Tests
 
-Python tests live in `python/tests/` and currently contain 143 cases.
+Python tests live in `python/tests/` and currently contain 148 cases.
 
 ```bash
 python3 -m pytest python/tests/ -v          # all tests, verbose
@@ -156,13 +156,13 @@ PYTHON=/path/to/venv/bin/python bash scripts/cross-impl-boundaries.sh
 The committed corpus covers every integer boundary, escaped and supplementary
 `Char` values, Unicode strings, fixed records, and enum/Boolean variants. It
 also presents the same malformed numeric, identifier, record, variant, and
-empty-declaration cases to both parsers. The current corpus performs 66 checks,
+empty-declaration cases to both parsers. The current corpus performs 82 checks,
 including mutual parsing, byte-identical wire output, and idempotence.
 
 ### Generated and fuzz testing
 
 `make generated-conformance` deterministically creates 64 varied valid
-documents and rulebooks plus 64 invalid schemata. It performs 960 acceptance,
+documents and rulebooks plus 64 invalid schemata. It performs 968 acceptance,
 rejection, cross-parser, canonical-wire, and idempotence checks.
 
 `make fuzz-random` runs 20,000 deterministic mutations through the diagnostic
@@ -181,8 +181,8 @@ make audit
 ```
 
 This executes:
-1. `make test` — 941 C assertions, 76 CLI checks, 143 Python tests, both
-   conformance levels, the 66-check boundary corpus, and 960 generated checks
+1. `make test` — 952 C assertions, 76 CLI checks, 148 Python tests, both
+   conformance levels, the 82-check boundary corpus, and 968 generated checks
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build
 4. `make fuzz-random` — 20,000 deterministic parser mutations under sanitizers
