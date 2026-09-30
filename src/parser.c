@@ -413,6 +413,14 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
         sizeof(hon_variant) * arm_count, _Alignof(hon_variant));
     memcpy(rec->u.record.arms, arms, sizeof(hon_variant) * arm_count);
 
+    uint32_t legal_value_count = bool_tag ? 2u :
+        (enum_tag ? resolved_tag->u.enumeration.value_count : 0u);
+    if (arm_count < legal_value_count) {
+        hon_diag_push(p->diags, p->arena, HON_DIAG_WARNING,
+                      tag_name.line, tag_name.col,
+                      "variant does not provide an arm for every legal discriminant value");
+    }
+
     return true;
 }
 
