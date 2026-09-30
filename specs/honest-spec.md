@@ -359,6 +359,7 @@ VariableAssignment = "var" Identifier ":" TypeReference "=" Value ";" .
 ```
 
 The data section contains one or more variable assignments. Each assignment binds an identifier to a typed value.
+Variable names MUST be unique within a document.
 
 ```pascal
 var message : Message = (

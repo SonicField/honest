@@ -1208,6 +1208,15 @@ static hon_document *parse_document(parser *p) {
 
         hon_token var_name = expect_skip(p, HON_TOK_IDENT);
         if (var_name.kind == HON_TOK_ERROR) continue;
+        for (uint32_t i = 0; i < p->var_count; i++) {
+            if (hon_str_eq(p->vars[i].name, var_name.text)) {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              var_name.line, var_name.col,
+                              "duplicate variable name '%.*s'",
+                              (int)var_name.text.len, var_name.text.data);
+                break;
+            }
+        }
 
         expect_skip(p, HON_TOK_COLON);
 

@@ -171,6 +171,13 @@ var c : N = 3;
     assert doc["c"] == 3
 
 
+def test_duplicate_variable_name_rejected():
+    with pytest.raises(honest.ParseError, match="duplicate variable"):
+        honest.parse_document(
+            "type N = Integer; var value : N = 1; var value : N = 2;"
+        )
+
+
 def test_sequence_of_records():
     doc = honest.parse("""
 type

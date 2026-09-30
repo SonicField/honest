@@ -494,9 +494,16 @@ class Parser:
 
         # Data section (optional)
         variables = []
+        variable_names: set[str] = set()
         while self._peek().kind == TokenKind.VAR:
             self._next()
             var_name_tok = self._expect(TokenKind.IDENT, "variable name")
+            if var_name_tok.text in variable_names:
+                raise self._error(
+                    f"duplicate variable name '{var_name_tok.text}'",
+                    var_name_tok,
+                )
+            variable_names.add(var_name_tok.text)
             self._expect(TokenKind.COLON, "variable")
             type_tok = self._expect(TokenKind.IDENT, "variable type")
 

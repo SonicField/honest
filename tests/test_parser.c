@@ -740,6 +740,13 @@ static void test_reserved_boolean_type_rejected(void) {
                     "reserved Boolean name cannot be redeclared");
 }
 
+static void test_duplicate_variable_name_rejected(void) {
+    const char *src =
+        "type N = Integer; var value : N = 1; var value : N = 2;";
+    assert_rejected(src, strlen(src),
+                    "duplicate variable names are rejected");
+}
+
 static void test_large_declarations_are_not_truncated(void) {
     char src[65536];
     size_t len = 0;
@@ -838,6 +845,7 @@ int main(void) {
     test_trailing_tokens_rejected();
     test_strict_document_and_rulebook_entry_points();
     test_reserved_boolean_type_rejected();
+    test_duplicate_variable_name_rejected();
     test_large_declarations_are_not_truncated();
 
     printf("%d/%d tests passed\n", tests_passed, tests_run);
