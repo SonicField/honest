@@ -42,6 +42,9 @@ def test_variant_definition_validation():
         "type K = (A, B); R = record case kind : K of Z : (); end; var r : R = (kind : A);",
         "type K = (A, B); R = record case kind : K of A : (); A : (); end; var r : R = (kind : A);",
         "type K = (A); R = record case kind : K of A : (x : Integer; x : Integer); end; var r : R = (kind : A; x : 1; x : 2);",
+        "type K = (A); R = record kind : Integer; case kind : K of A : (); end; var r : R = (kind : 1; kind : A);",
+        "type K = (A); R = record x : Integer; case kind : K of A : (x : Integer); end; var r : R = (x : 1; kind : A; x : 2);",
+        "type K = (A); R = record case kind : K of A : (kind : Integer); end; var r : R = (kind : A; kind : 1);",
     ]
     for source in invalid:
         with pytest.raises(honest.ParseError):

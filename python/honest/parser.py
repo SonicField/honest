@@ -157,6 +157,9 @@ class Parser:
             tag_tok = self._expect(TokenKind.IDENT, "variant tag name")
             self._reject_reserved_boolean_name(tag_tok, "a field name")
             tag_name = tag_tok.text
+            if any(field.name == tag_name for field in fields):
+                raise self._error(
+                    f"variant tag duplicates fixed field '{tag_name}'", tag_tok)
             self._expect(TokenKind.COLON, "variant tag")
             type_tok = self._expect(TokenKind.IDENT, "variant tag type")
             tag_type = self._types.get(type_tok.text)
@@ -204,6 +207,13 @@ class Parser:
                 self._expect(TokenKind.LPAREN, "variant arm")
 
                 arm_fields = self._parse_fields()
+                fixed_names = {field.name for field in fields}
+                for arm_field in arm_fields:
+                    if arm_field.name == tag_name or arm_field.name in fixed_names:
+                        raise self._error(
+                            f"variant field '{arm_field.name}' conflicts with record field",
+                            label_tok,
+                        )
                 self._expect(TokenKind.RPAREN, "variant arm")
 
                 arms.append(Variant(label=label_tok.text, fields=arm_fields))

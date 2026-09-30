@@ -156,6 +156,14 @@ static void reject_reserved_boolean_name(parser *p, hon_token token,
     }
 }
 
+static bool field_name_exists(const hon_field *fields, uint32_t count,
+                              hon_str name) {
+    for (uint32_t i = 0; i < count; i++) {
+        if (hon_str_eq(fields[i].name, name)) return true;
+    }
+    return false;
+}
+
 /* ---- Primitive Type Registry ---- */
 
 static hon_type primitive_types[HON_PRIM_COUNT];
@@ -381,6 +389,13 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
     hon_token tag_name = expect_skip(p, HON_TOK_IDENT);
     if (tag_name.kind == HON_TOK_ERROR) return false;
     reject_reserved_boolean_name(p, tag_name, "a field name");
+    if (field_name_exists(rec->u.record.fields, rec->u.record.field_count,
+                          tag_name.text)) {
+        hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                      tag_name.line, tag_name.col,
+                      "variant tag duplicates fixed field '%.*s'",
+                      (int)tag_name.text.len, tag_name.text.data);
+    }
 
     expect_skip(p, HON_TOK_COLON);
 
@@ -454,6 +469,19 @@ static bool parse_variant_part(parser *p, hon_type *rec) {
 
         if (peek_skip_comments(p).kind != HON_TOK_RPAREN) {
             if (!parse_fields(p, &arm_fields, &fcount, true)) return false;
+        }
+
+        for (uint32_t i = 0; i < fcount; i++) {
+            if (hon_str_eq(arm_fields[i].name, tag_name.text) ||
+                field_name_exists(rec->u.record.fields,
+                                  rec->u.record.field_count,
+                                  arm_fields[i].name)) {
+                hon_diag_push(p->diags, p->arena, HON_DIAG_ERROR,
+                              label.line, label.col,
+                              "variant field '%.*s' conflicts with record field",
+                              (int)arm_fields[i].name.len,
+                              arm_fields[i].name.data);
+            }
         }
 
         expect_skip(p, HON_TOK_RPAREN);

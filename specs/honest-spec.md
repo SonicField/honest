@@ -251,6 +251,9 @@ type
 5. Every value of the discriminant type SHOULD have a corresponding case arm. Implementations MUST warn if a discriminant value has no case arm.
 6. Every arm label MUST be a value of the discriminant type and MUST occur at
    most once. Field names within an arm MUST be unique.
+7. The discriminant name and every arm field name MUST be distinct from all
+   fixed field names. An arm field MUST also be distinct from the discriminant
+   name. The same field name MAY appear in different, mutually exclusive arms.
 
 **Optionality pattern.** The canonical way to express an optional field is a Boolean variant:
 
