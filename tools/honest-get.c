@@ -13,6 +13,7 @@
  */
 
 #include "honest.h"
+#include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,30 +93,18 @@ static const hon_value *navigate_path(const hon_value *val, const char *field_pa
     return val;
 }
 
-static char *read_stdin(size_t *out_len) {
-    size_t cap = 4096, len = 0;
-    char *buf = malloc(cap);
-    if (!buf) { fprintf(stderr, "Out of memory\n"); return NULL; }
-
-    size_t n;
-    while ((n = fread(buf + len, 1, cap - len, stdin)) > 0) {
-        len += n;
-        if (len == cap) {
-            cap *= 2;
-            char *tmp = realloc(buf, cap);
-            if (!tmp) { fprintf(stderr, "Out of memory\n"); free(buf); return NULL; }
-            buf = tmp;
-        }
-    }
-    *out_len = len;
-    return buf;
+static void usage(FILE *out, const char *prog) {
+    fprintf(out, "Usage: %s <file | -> <var-name> <field> [field ...]\n", prog);
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 &&
+        (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+        usage(stdout, argv[0]);
+        return hon_cli_finish_stdout() == 0 ? 0 : 1;
+    }
     if (argc < 4) {
-        fprintf(stderr,
-            "Usage: %s <file | -> <var-name> <field> [field ...]\n",
-            argv[0]);
+        usage(stderr, argv[0]);
         return 2;
     }
 
@@ -128,7 +117,7 @@ int main(int argc, char **argv) {
 
     if (strcmp(path, "-") == 0) {
         size_t len;
-        char *src = read_stdin(&len);
+        char *src = hon_cli_read_all(stdin, &len);
         if (!src) {
             fprintf(stderr, "Failed to read stdin\n");
             return 1;
@@ -139,12 +128,10 @@ int main(int argc, char **argv) {
         doc = hon_parse_file(path, &diags);
     }
 
-    if (!doc) {
-        for (uint32_t i = 0; i < diags.count; i++) {
-            fprintf(stderr, "%u:%u: %s\n",
-                    diags.items[i].line, diags.items[i].col,
-                    diags.items[i].message);
-        }
+    if (!doc || hon_cli_has_errors(&diags)) {
+        hon_cli_print_diags(&diags);
+        if (doc) hon_doc_free(doc);
+        else hon_diag_free(&diags);
         return 1;
     }
 
@@ -178,6 +165,8 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
+    int rc = any_missing ? 1 : 0;
+    if (hon_cli_finish_stdout() < 0) rc = 1;
     hon_doc_free(doc);
-    return any_missing ? 1 : 0;
+    return rc;
 }

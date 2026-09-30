@@ -428,7 +428,7 @@ static void test_build_with_single_quotes(void) {
     char tmptype[] = "/tmp/honest-test-type-XXXXXX";
     int tfd = mkstemp(tmptype);
     const char *typedef_content =
-        "type\n  R = record\n    s : String;\n  end;\nvar _d : Boolean = True;\n";
+        "type\n  R = record\n    s : String;\n  end;\n";
     write(tfd, typedef_content, strlen(typedef_content));
     close(tfd);
 
@@ -502,8 +502,7 @@ static void test_build_self_describing(void) {
         "  Color = (Red, Green, Blue);\n"
         "  R = record\n"
         "    c : Color;\n"
-        "  end;\n"
-        "var _d : Boolean = True;\n";
+        "  end;\n";
     write(tfd, typedef_content, strlen(typedef_content));
     close(tfd);
 
@@ -547,8 +546,7 @@ static void test_build_utf8_round_trip(void) {
     char tmptype[] = "/tmp/honest-test-utf8-type-XXXXXX";
     int tfd = mkstemp(tmptype);
     const char *typedef_content =
-        "type\n  R = record\n    s : String;\n  end;\n"
-        "var _d : Boolean = True;\n";
+        "type\n  R = record\n    s : String;\n  end;\n";
     write(tfd, typedef_content, strlen(typedef_content));
     close(tfd);
 

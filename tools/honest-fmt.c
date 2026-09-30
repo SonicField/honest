@@ -9,28 +9,13 @@
  */
 
 #include "honest.h"
+#include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static char *read_stdin(size_t *out_len) {
-    size_t cap = 4096;
-    size_t len = 0;
-    char *buf = malloc(cap);
-    if (!buf) return NULL;
-
-    size_t n;
-    while ((n = fread(buf + len, 1, cap - len, stdin)) > 0) {
-        len += n;
-        if (len == cap) {
-            cap *= 2;
-            buf = realloc(buf, cap);
-            if (!buf) return NULL;
-        }
-    }
-    buf[len] = '\0';
-    *out_len = len;
-    return buf;
+static void usage(FILE *out, const char *prog) {
+    fprintf(out, "Usage: %s [--wire | --document] <file.honest | ->\n", prog);
 }
 
 int main(int argc, char **argv) {
@@ -43,17 +28,24 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--document") == 0 || strcmp(argv[i], "-d") == 0) {
             mode = HON_MODE_DOCUMENT;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            fprintf(stderr, "Usage: %s [--wire|--document] <file.honest | ->\n",
-                    argv[0]);
-            return 0;
+            usage(stdout, argv[0]);
+            return hon_cli_finish_stdout() == 0 ? 0 : 1;
+        } else if (argv[i][0] == '-' && strcmp(argv[i], "-") != 0) {
+            fprintf(stderr, "Unknown option: %s\n", argv[i]);
+            usage(stderr, argv[0]);
+            return 2;
         } else {
+            if (path) {
+                fprintf(stderr, "Only one input path may be specified\n");
+                usage(stderr, argv[0]);
+                return 2;
+            }
             path = argv[i];
         }
     }
 
     if (!path) {
-        fprintf(stderr, "Usage: %s [--wire|--document] <file.honest | ->\n",
-                argv[0]);
+        usage(stderr, argv[0]);
         return 2;
     }
 
@@ -62,7 +54,7 @@ int main(int argc, char **argv) {
 
     if (strcmp(path, "-") == 0) {
         size_t len;
-        char *src = read_stdin(&len);
+        char *src = hon_cli_read_all(stdin, &len);
         if (!src) { fprintf(stderr, "Failed to read stdin\n"); return 1; }
         doc = hon_parse(src, len, &diags);
         free(src);
@@ -70,17 +62,16 @@ int main(int argc, char **argv) {
         doc = hon_parse_file(path, &diags);
     }
 
-    if (!doc) {
-        for (uint32_t i = 0; i < diags.count; i++) {
-            fprintf(stderr, "%u:%u: %s\n",
-                    diags.items[i].line, diags.items[i].col,
-                    diags.items[i].message);
-        }
+    if (!doc || hon_cli_has_errors(&diags)) {
+        hon_cli_print_diags(&diags);
+        if (doc) hon_doc_free(doc);
+        else hon_diag_free(&diags);
         return 1;
     }
 
-    hon_serialise_to(doc, mode, stdout);
+    int rc = hon_serialise_to(doc, mode, stdout);
+    if (rc < 0) fprintf(stderr, "Failed to write output\n");
 
     hon_doc_free(doc);
-    return 0;
+    return rc == 0 ? 0 : 1;
 }

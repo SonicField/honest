@@ -364,7 +364,10 @@ int hon_serialise_to(const hon_document *doc, hon_serial_mode mode, FILE *out) {
     size_t len;
     char *s = hon_serialise(doc, mode, &len);
     if (!s) return -1;
-    fwrite(s, 1, len, out);
+    if (fwrite(s, 1, len, out) != len || fflush(out) != 0) {
+        free(s);
+        return -1;
+    }
     free(s);
     return 0;
 }

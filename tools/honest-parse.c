@@ -9,46 +9,13 @@
  */
 
 #include "honest.h"
+#include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static void print_diags(const hon_diag_list *diags) {
-    for (uint32_t i = 0; i < diags->count; i++) {
-        const char *level;
-        switch (diags->items[i].level) {
-        case HON_DIAG_ERROR:   level = "error"; break;
-        case HON_DIAG_WARNING: level = "warning"; break;
-        case HON_DIAG_INFO:    level = "info"; break;
-        default:               level = "???"; break;
-        }
-        fprintf(stderr, "%s:%u:%u: %s\n", level,
-                diags->items[i].line, diags->items[i].col,
-                diags->items[i].message);
-    }
-}
-
-static char *read_stdin(size_t *out_len) {
-    size_t cap = 4096;
-    size_t len = 0;
-    char *buf = malloc(cap);
-    if (!buf) return NULL;
-
-    size_t n;
-    while ((n = fread(buf + len, 1, cap - len, stdin)) > 0) {
-        len += n;
-        if (len == cap) {
-            cap *= 2;
-            buf = realloc(buf, cap);
-            if (!buf) return NULL;
-        }
-    }
-    /* Safe: len < cap is guaranteed here. The loop exits when fread returns 0,
-     * at which point either len < cap (didn't fill buffer) or len == old_cap
-     * and realloc doubled cap, so buf has room at index len. */
-    buf[len] = '\0';
-    *out_len = len;
-    return buf;
+static void usage(FILE *out, const char *prog) {
+    fprintf(out, "Usage: %s [-q | -v] <file.honest | ->\n", prog);
 }
 
 int main(int argc, char **argv) {
@@ -62,15 +29,30 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            fprintf(stderr, "Usage: %s [-q|-v] <file.honest | ->\n", argv[0]);
-            return 0;
+            usage(stdout, argv[0]);
+            return hon_cli_finish_stdout() == 0 ? 0 : 1;
+        } else if (argv[i][0] == '-' && strcmp(argv[i], "-") != 0) {
+            fprintf(stderr, "Unknown option: %s\n", argv[i]);
+            usage(stderr, argv[0]);
+            return 2;
         } else {
+            if (path) {
+                fprintf(stderr, "Only one input path may be specified\n");
+                usage(stderr, argv[0]);
+                return 2;
+            }
             path = argv[i];
         }
     }
 
+    if (quiet && verbose) {
+        fprintf(stderr, "--quiet and --verbose are mutually exclusive\n");
+        usage(stderr, argv[0]);
+        return 2;
+    }
+
     if (!path) {
-        fprintf(stderr, "Usage: %s [-q|-v] <file.honest | ->\n", argv[0]);
+        usage(stderr, argv[0]);
         return 2;
     }
 
@@ -79,7 +61,7 @@ int main(int argc, char **argv) {
 
     if (strcmp(path, "-") == 0) {
         size_t len;
-        char *src = read_stdin(&len);
+        char *src = hon_cli_read_all(stdin, &len);
         if (!src) { fprintf(stderr, "Failed to read stdin\n"); return 1; }
         doc = hon_parse(src, len, &diags);
         free(src);
@@ -87,13 +69,10 @@ int main(int argc, char **argv) {
         doc = hon_parse_file(path, &diags);
     }
 
-    bool has_errors = false;
-    for (uint32_t i = 0; i < diags.count; i++) {
-        if (diags.items[i].level == HON_DIAG_ERROR) has_errors = true;
-    }
+    bool has_errors = hon_cli_has_errors(&diags);
 
     if (!quiet) {
-        print_diags(&diags);
+        hon_cli_print_diags(&diags);
     }
 
     if (doc && !has_errors) {
@@ -128,6 +107,8 @@ int main(int argc, char **argv) {
     }
 
     int rc = (doc && !has_errors) ? 0 : 1;
+    if (rc == 0 && !quiet && hon_cli_finish_stdout() < 0) rc = 1;
     if (doc) hon_doc_free(doc);
+    else hon_diag_free(&diags);
     return rc;
 }

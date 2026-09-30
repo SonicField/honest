@@ -13,7 +13,9 @@ LIB_SRCS = $(wildcard $(SRCDIR)/*.c)
 LIB_OBJS = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(LIB_SRCS))
 
 TOOL_SRCS = $(wildcard $(TOOLDIR)/*.c)
-TOOL_BINS = $(patsubst $(TOOLDIR)/%.c,$(BUILDDIR)/%,$(TOOL_SRCS))
+TOOL_MAIN_SRCS = $(filter-out $(TOOLDIR)/cli_common.c,$(TOOL_SRCS))
+TOOL_BINS = $(patsubst $(TOOLDIR)/%.c,$(BUILDDIR)/%,$(TOOL_MAIN_SRCS))
+TOOL_COMMON = $(TOOLDIR)/cli_common.c $(TOOLDIR)/cli_common.h
 
 TEST_SRCS = $(wildcard $(TESTDIR)/*.c)
 TEST_BINS = $(patsubst $(TESTDIR)/%.c,$(BUILDDIR)/test_%,$(TEST_SRCS))
@@ -47,8 +49,8 @@ $(BUILDDIR)/$(LIBNAME): $(LIB_OBJS)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/%: $(TOOLDIR)/%.c $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
-	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@
+$(BUILDDIR)/%: $(TOOLDIR)/%.c $(TOOL_COMMON) $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
+	$(CC) $(CFLAGS) $(TOOLDIR)/$*.c $(TOOLDIR)/cli_common.c -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@
 
 $(BUILDDIR)/test_%: $(TESTDIR)/%.c $(BUILDDIR)/$(LIBNAME) | $(BUILDDIR)
 	$(CC) $(CFLAGS) $< -L$(BUILDDIR) -lhonest $(LDFLAGS) -o $@

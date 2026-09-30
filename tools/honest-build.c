@@ -15,6 +15,7 @@
  */
 
 #include "honest.h"
+#include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,8 @@ typedef struct {
     char *raw_value;
 } assignment;
 
+static void free_assignment(assignment *a);
+
 static int parse_assignment(const char *arg, assignment *out) {
     const char *eq = strchr(arg, '=');
     if (!eq || eq == arg) return -1;
@@ -52,17 +55,35 @@ static int parse_assignment(const char *arg, assignment *out) {
 
     /* Split key on dots */
     out->depth = 0;
+    out->raw_value = NULL;
+    if (key[0] == '.' || key[key_len - 1] == '.' || strstr(key, "..")) {
+        free(key);
+        return -1;
+    }
     char *tok = strtok(key, ".");
     while (tok && out->depth < MAX_PATH_DEPTH) {
-        out->segments[out->depth++] = strdup(tok);
+        char *segment = strdup(tok);
+        if (!segment) {
+            free(key);
+            free_assignment(out);
+            return -1;
+        }
+        out->segments[out->depth++] = segment;
         tok = strtok(NULL, ".");
     }
     free(key);
 
-    if (out->depth == 0) return -1;
+    if (out->depth == 0 || tok) {
+        free_assignment(out);
+        return -1;
+    }
 
     /* Value is everything after the = */
     out->raw_value = strdup(eq + 1);
+    if (!out->raw_value) {
+        free_assignment(out);
+        return -1;
+    }
     return 0;
 }
 
@@ -78,6 +99,45 @@ static hon_type *resolve_type(hon_type *t) {
     while (t && t->kind == HON_TYPE_ALIAS)
         t = t->u.alias.target;
     return t;
+}
+
+static int utf8_decode_one(const unsigned char *s, size_t len,
+                           uint32_t *codepoint, size_t *used) {
+    uint32_t cp;
+    size_t width;
+
+    if (len == 0) return -1;
+    if (s[0] < 0x80) {
+        cp = s[0];
+        width = 1;
+    } else if (s[0] >= 0xC2 && s[0] <= 0xDF) {
+        cp = s[0] & 0x1F;
+        width = 2;
+    } else if (s[0] >= 0xE0 && s[0] <= 0xEF) {
+        cp = s[0] & 0x0F;
+        width = 3;
+    } else if (s[0] >= 0xF0 && s[0] <= 0xF4) {
+        cp = s[0] & 0x07;
+        width = 4;
+    } else {
+        return -1;
+    }
+
+    if (width > len) return -1;
+    for (size_t i = 1; i < width; i++) {
+        if ((s[i] & 0xC0) != 0x80) return -1;
+        cp = (cp << 6) | (s[i] & 0x3F);
+    }
+
+    if ((width == 3 && cp < 0x800) ||
+        (width == 4 && cp < 0x10000) ||
+        (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF) {
+        return -1;
+    }
+
+    *codepoint = cp;
+    *used = width;
+    return 0;
 }
 
 /* Check if a string is a valid integer. */
@@ -157,6 +217,14 @@ static hon_value *build_primitive_value(hon_arena *a, hon_type *type,
             fprintf(stderr, "Integer overflow: '%s'\n", raw);
             return NULL;
         }
+        if ((resolved->u.prim == HON_PRIM_BYTE && (ival < 0 || ival > 255)) ||
+            (resolved->u.prim == HON_PRIM_WORD && (ival < 0 || ival > 65535)) ||
+            (resolved->u.prim == HON_PRIM_INTEGER &&
+             (ival < INT32_MIN || ival > INT32_MAX))) {
+            fprintf(stderr, "Integer value out of range for '%.*s': '%s'\n",
+                    (int)type->name.len, type->name.data, raw);
+            return NULL;
+        }
         v->kind = HON_VAL_INT;
         v->u.integer = ival;
         return v;
@@ -172,14 +240,19 @@ static hon_value *build_primitive_value(hon_arena *a, hon_type *type,
         return v;
     }
 
-    case HON_PRIM_CHAR:
-        if (strlen(raw) == 0) {
-            fprintf(stderr, "Empty Char value\n");
+    case HON_PRIM_CHAR: {
+        uint32_t codepoint;
+        size_t used;
+        size_t raw_len = strlen(raw);
+        if (utf8_decode_one((const unsigned char *)raw, raw_len,
+                            &codepoint, &used) < 0 || used != raw_len) {
+            fprintf(stderr, "Char value must be exactly one Unicode scalar: '%s'\n", raw);
             return NULL;
         }
         v->kind = HON_VAL_CHAR;
-        v->u.character = (uint32_t)(unsigned char)raw[0];
+        v->u.character = codepoint;
         return v;
+    }
 
     case HON_PRIM_STRING:
         v->kind = HON_VAL_STRING;
@@ -285,6 +358,52 @@ static hon_value *build_record_value(hon_arena *a, hon_type *type,
     }
 
     return v;
+}
+
+static int parse_sequence_index(const char *segment, long *index) {
+    char *end;
+    long value;
+
+    errno = 0;
+    value = strtol(segment, &end, 10);
+    if (errno == ERANGE || *segment == '\0' || *end != '\0' || value < 0 ||
+        value >= MAX_ASSIGNMENTS) {
+        return -1;
+    }
+    *index = value;
+    return 0;
+}
+
+static int validate_assignment_path(hon_type *type, const assignment *a,
+                                    int offset) {
+    hon_type *resolved = resolve_type(type);
+    if (!resolved) return -1;
+
+    if (resolved->kind == HON_TYPE_PRIMITIVE || resolved->kind == HON_TYPE_ENUM)
+        return offset == a->depth ? 0 : -1;
+    if (offset >= a->depth) return -1;
+
+    if (resolved->kind == HON_TYPE_RECORD) {
+        for (uint32_t i = 0; i < resolved->u.record.field_count; i++) {
+            hon_str name = resolved->u.record.fields[i].name;
+            if (strlen(a->segments[offset]) == name.len &&
+                memcmp(a->segments[offset], name.data, name.len) == 0) {
+                return validate_assignment_path(resolved->u.record.fields[i].type,
+                                                a, offset + 1);
+            }
+        }
+        return -1;
+    }
+
+    if (resolved->kind == HON_TYPE_SEQUENCE) {
+        long index;
+        if (parse_sequence_index(a->segments[offset], &index) < 0) return -1;
+        (void)index;
+        return validate_assignment_path(resolved->u.sequence.element_type,
+                                        a, offset + 1);
+    }
+
+    return -1;
 }
 
 static hon_value *build_sequence_value(hon_arena *a, hon_type *type,
@@ -401,27 +520,20 @@ static hon_value *build_value(hon_arena *a, hon_type *type,
 static int is_valid_utf8(const char *s, size_t len) {
     size_t i = 0;
     while (i < len) {
-        unsigned char c = (unsigned char)s[i];
-        size_t seqlen;
-        if (c < 0x80) seqlen = 1;
-        else if ((c & 0xE0) == 0xC0) seqlen = 2;
-        else if ((c & 0xF0) == 0xE0) seqlen = 3;
-        else if ((c & 0xF8) == 0xF0) seqlen = 4;
-        else return 0;
-
-        if (i + seqlen > len) return 0;
-        for (size_t j = 1; j < seqlen; j++) {
-            if (((unsigned char)s[i+j] & 0xC0) != 0x80) return 0;
-        }
-        i += seqlen;
+        uint32_t codepoint;
+        size_t used;
+        if (utf8_decode_one((const unsigned char *)s + i, len - i,
+                            &codepoint, &used) < 0) return 0;
+        (void)codepoint;
+        i += used;
     }
     return 1;
 }
 
 /* ---- Main ---- */
 
-static void usage(const char *prog) {
-    fprintf(stderr,
+static void usage(FILE *out, const char *prog) {
+    fprintf(out,
         "Usage: %s --type TypeName [--var-name name] "
         "[--rulebook file | --typedef 'type ...'] "
         "field=value ...\n", prog);
@@ -445,11 +557,11 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[argi], "--typedef") == 0 && argi + 1 < argc) {
             typedef_text = argv[++argi];
         } else if (strcmp(argv[argi], "--help") == 0 || strcmp(argv[argi], "-h") == 0) {
-            usage(argv[0]);
-            return 0;
+            usage(stdout, argv[0]);
+            return hon_cli_finish_stdout() == 0 ? 0 : 1;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[argi]);
-            usage(argv[0]);
+            usage(stderr, argv[0]);
             return 1;
         }
         argi++;
@@ -457,13 +569,24 @@ int main(int argc, char **argv) {
 
     if (!type_name) {
         fprintf(stderr, "Error: --type is required\n");
-        usage(argv[0]);
+        usage(stderr, argv[0]);
+        return 1;
+    }
+
+    if ((rulebook_path != NULL) == (typedef_text != NULL)) {
+        fprintf(stderr, "Error: exactly one of --rulebook or --typedef is required\n");
+        return 1;
+    }
+
+    if ((size_t)(argc - argi) > MAX_ASSIGNMENTS) {
+        fprintf(stderr, "Error: at most %d field assignments are allowed\n",
+                MAX_ASSIGNMENTS);
         return 1;
     }
 
     if (argi >= argc) {
         fprintf(stderr, "Error: no field=value arguments provided\n");
-        usage(argv[0]);
+        usage(stderr, argv[0]);
         return 1;
     }
 
@@ -473,28 +596,32 @@ int main(int argc, char **argv) {
 
     if (rulebook_path) {
         type_doc = hon_parse_file(rulebook_path, &diags);
-        if (!type_doc) {
+        if (!type_doc || hon_cli_has_errors(&diags)) {
             fprintf(stderr, "Failed to parse rulebook '%s'\n", rulebook_path);
             for (uint32_t i = 0; i < diags.count; i++)
                 fprintf(stderr, "  %u:%u: %s\n",
                         diags.items[i].line, diags.items[i].col,
                         diags.items[i].message);
+            if (type_doc) hon_doc_free(type_doc);
+            else hon_diag_free(&diags);
             return 1;
         }
     } else if (typedef_text) {
         size_t tlen = strlen(typedef_text);
         type_doc = hon_parse(typedef_text, tlen, &diags);
-        if (!type_doc) {
+        if (!type_doc || hon_cli_has_errors(&diags)) {
             fprintf(stderr, "Failed to parse type definition\n");
             for (uint32_t i = 0; i < diags.count; i++)
                 fprintf(stderr, "  %u:%u: %s\n",
                         diags.items[i].line, diags.items[i].col,
                         diags.items[i].message);
+            if (type_doc) hon_doc_free(type_doc);
+            else hon_diag_free(&diags);
             return 1;
         }
     } else {
         fprintf(stderr, "Error: --rulebook or --typedef required\n");
-        usage(argv[0]);
+        usage(stderr, argv[0]);
         return 1;
     }
 
@@ -531,6 +658,13 @@ int main(int argc, char **argv) {
             hon_doc_free(type_doc);
             return 1;
         }
+        if (validate_assignment_path(target_type, &assigns[nassign], 0) < 0) {
+            fprintf(stderr, "Unknown or invalid field path: '%s'\n", argv[i]);
+            free_assignment(&assigns[nassign]);
+            for (int j = 0; j < nassign; j++) free_assignment(&assigns[j]);
+            hon_doc_free(type_doc);
+            return 1;
+        }
         nassign++;
     }
 
@@ -547,19 +681,26 @@ int main(int argc, char **argv) {
     /* Add the variable to type_doc directly and serialise.
      * type_doc already has all type declarations; we just add the data. */
     hon_str vname = {var_name, strlen(var_name)};
-    hon_doc_add_var(type_doc, vname, target_type, val);
+    if (hon_doc_add_var(type_doc, vname, target_type, val) < 0) {
+        fprintf(stderr, "Failed to add output variable\n");
+        for (int i = 0; i < nassign; i++) free_assignment(&assigns[i]);
+        hon_doc_free(type_doc);
+        return 1;
+    }
 
     /* Serialise */
     size_t out_len;
     char *output = hon_serialise(type_doc, HON_MODE_DOCUMENT, &out_len);
-    if (output) {
-        fwrite(output, 1, out_len, stdout);
-        if (out_len > 0 && output[out_len - 1] != '\n')
-            putchar('\n');
-        free(output);
+    int rc = 0;
+    if (!output) {
+        fprintf(stderr, "Failed to serialise output document\n");
+        rc = 1;
+    } else if (hon_cli_write_stdout(output, out_len) < 0) {
+        rc = 1;
     }
+    free(output);
 
     for (int i = 0; i < nassign; i++) free_assignment(&assigns[i]);
     hon_doc_free(type_doc);
-    return 0;
+    return rc;
 }

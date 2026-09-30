@@ -11,28 +11,13 @@
  */
 
 #include "honest.h"
+#include "cli_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static char *read_all(FILE *f, size_t *out_len) {
-    size_t cap = 4096, len = 0;
-    char *buf = malloc(cap);
-    if (!buf) return NULL;
-
-    size_t n;
-    while ((n = fread(buf + len, 1, cap - len, f)) > 0) {
-        len += n;
-        if (len == cap) {
-            cap *= 2;
-            char *tmp = realloc(buf, cap);
-            if (!tmp) { free(buf); return NULL; }
-            buf = tmp;
-        }
-    }
-    if (ferror(f)) { free(buf); return NULL; }
-    *out_len = len;
-    return buf;
+static void usage(FILE *out, const char *prog) {
+    fprintf(out, "Usage: %s [file | -]\n", prog);
 }
 
 /* Check if position is at the start of a line (or start of input). */
@@ -85,6 +70,16 @@ static size_t skip_line_whitespace(const char *src, size_t pos, size_t len) {
 
 int main(int argc, char **argv) {
     FILE *f = stdin;
+    if (argc == 2 &&
+        (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+        usage(stdout, argv[0]);
+        return hon_cli_finish_stdout() == 0 ? 0 : 1;
+    }
+    if (argc > 2) {
+        fprintf(stderr, "Only one input path may be specified\n");
+        usage(stderr, argv[0]);
+        return 2;
+    }
     if (argc > 1 && strcmp(argv[1], "-") != 0) {
         f = fopen(argv[1], "r");
         if (!f) {
@@ -94,7 +89,7 @@ int main(int argc, char **argv) {
     }
 
     size_t len;
-    char *src = read_all(f, &len);
+    char *src = hon_cli_read_all(f, &len);
     if (f != stdin) fclose(f);
     if (!src) {
         fprintf(stderr, "Failed to read input\n");
@@ -148,19 +143,23 @@ int main(int argc, char **argv) {
                 hon_diag_list diags = {0};
                 hon_document *doc = hon_parse(src + candidate,
                                               extract_end - candidate, &diags);
-                if (doc) {
+                if (doc && !hon_cli_has_errors(&diags)) {
                     size_t out_len;
                     char *wire = hon_serialise(doc, HON_MODE_WIRE, &out_len);
                     if (wire) {
-                        fwrite(wire, 1, out_len, stdout);
-                        if (out_len > 0 && wire[out_len-1] != '\n')
-                            putchar('\n');
+                        int rc = hon_cli_write_stdout(wire, out_len);
                         free(wire);
+                        hon_doc_free(doc);
+                        free(src);
+                        return rc == 0 ? 0 : 1;
                     }
                     hon_doc_free(doc);
                     free(src);
-                    return 0;
+                    fprintf(stderr, "Failed to serialise Honest document\n");
+                    return 1;
                 }
+                if (doc) hon_doc_free(doc);
+                else hon_diag_free(&diags);
             }
 
             i = fence_end;
@@ -174,19 +173,23 @@ int main(int argc, char **argv) {
                 /* Try parsing from here to end of input */
                 hon_diag_list diags = {0};
                 hon_document *doc = hon_parse(src + ws, len - ws, &diags);
-                if (doc) {
+                if (doc && !hon_cli_has_errors(&diags)) {
                     size_t out_len;
                     char *wire = hon_serialise(doc, HON_MODE_WIRE, &out_len);
                     if (wire) {
-                        fwrite(wire, 1, out_len, stdout);
-                        if (out_len > 0 && wire[out_len-1] != '\n')
-                            putchar('\n');
+                        int rc = hon_cli_write_stdout(wire, out_len);
                         free(wire);
+                        hon_doc_free(doc);
+                        free(src);
+                        return rc == 0 ? 0 : 1;
                     }
                     hon_doc_free(doc);
                     free(src);
-                    return 0;
+                    fprintf(stderr, "Failed to serialise Honest document\n");
+                    return 1;
                 }
+                if (doc) hon_doc_free(doc);
+                else hon_diag_free(&diags);
             }
         }
 
