@@ -30,6 +30,10 @@ typedef struct {
     hon_variable  *vars;
     uint32_t       var_count;
     uint32_t       var_cap;
+    /* Comments retained for document-mode serialisation. */
+    hon_str        *comments;
+    uint32_t       comment_count;
+    uint32_t       comment_cap;
     /* Nesting depth tracking */
     uint32_t       depth;
     uint32_t       max_depth;
@@ -99,10 +103,24 @@ static bool valid_utf8(const char *src, size_t len) {
 
 /* ---- Helpers ---- */
 
+static void preserve_comment(parser *p, hon_str comment) {
+    if (p->comment_count >= p->comment_cap) {
+        uint32_t new_cap = p->comment_cap * 2;
+        hon_str *new_comments = hon_arena_alloc(
+            p->arena, sizeof(hon_str) * new_cap, _Alignof(hon_str));
+        if (!new_comments) return;
+        memcpy(new_comments, p->comments, sizeof(hon_str) * p->comment_count);
+        p->comments = new_comments;
+        p->comment_cap = new_cap;
+    }
+    p->comments[p->comment_count++] = comment;
+}
+
 static hon_token next_skip_comments(parser *p) {
     for (;;) {
         hon_token t = hon_lexer_next(p->lex);
         if (t.kind != HON_TOK_COMMENT) return t;
+        preserve_comment(p, t.text);
     }
 }
 
@@ -112,6 +130,7 @@ static hon_token peek_skip_comments(parser *p) {
         hon_token t = hon_lexer_peek(p->lex);
         if (t.kind != HON_TOK_COMMENT) return t;
         hon_lexer_next(p->lex); /* consume the comment */
+        preserve_comment(p, t.text);
     }
 }
 
@@ -1192,6 +1211,8 @@ static hon_document *parse_document(parser *p) {
     doc->type_count = p->type_count;
     doc->vars       = p->vars;
     doc->var_count  = p->var_count;
+    doc->comments   = p->comments;
+    doc->comment_count = p->comment_count;
 
     return doc;
 }
@@ -1254,6 +1275,8 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
         .type_count = 0,
         .var_cap   = 16,
         .var_count = 0,
+        .comment_cap = 16,
+        .comment_count = 0,
         .depth     = 0,
         .max_depth = MAX_DEPTH_DEFAULT,
     };
@@ -1270,6 +1293,8 @@ hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags) {
                               _Alignof(hon_type *));
     p.vars  = hon_arena_alloc(arena, sizeof(hon_variable) * p.var_cap,
                               _Alignof(hon_variable));
+    p.comments = hon_arena_alloc(arena, sizeof(hon_str) * p.comment_cap,
+                                 _Alignof(hon_str));
 
     hon_document *doc = parse_document(&p);
     if (!doc) {
@@ -1302,6 +1327,8 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
         .type_count = 0,
         .var_cap   = 16,
         .var_count = 0,
+        .comment_cap = 16,
+        .comment_count = 0,
         .depth     = 0,
         .max_depth = MAX_DEPTH_DEFAULT,
         .registry  = reg,
@@ -1319,6 +1346,8 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
                               _Alignof(hon_type *));
     p.vars  = hon_arena_alloc(arena, sizeof(hon_variable) * p.var_cap,
                               _Alignof(hon_variable));
+    p.comments = hon_arena_alloc(arena, sizeof(hon_str) * p.comment_cap,
+                                 _Alignof(hon_str));
 
     hon_document *doc = parse_document(&p);
     if (!doc) {

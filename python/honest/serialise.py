@@ -63,6 +63,9 @@ def serialise(doc: Document, wire: bool = False) -> str:
 
 def _serialise_document(doc: Document) -> str:
     parts = []
+    for comment in doc.comments:
+        parts.append(comment)
+        parts.append("\n")
     parts.append("type\n")
 
     for i, t in enumerate(doc.types):

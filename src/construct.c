@@ -22,6 +22,8 @@ hon_document *hon_doc_new(void) {
     doc->arena      = arena;
     doc->type_count = 0;
     doc->var_count  = 0;
+    doc->comments = NULL;
+    doc->comment_count = 0;
 
     doc->types = hon_arena_alloc(arena, sizeof(hon_type *) * INITIAL_TYPE_CAP,
                                  _Alignof(hon_type *));

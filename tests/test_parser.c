@@ -354,6 +354,21 @@ static void test_comments_preserved(void) {
     ASSERT(doc->type_count == 1, "one type despite comments");
     ASSERT(doc->vars[0].value->u.integer == 42, "correct value");
 
+    size_t document_len = 0;
+    char *document = hon_serialise(doc, HON_MODE_DOCUMENT, &document_len);
+    const char *first = document ? strstr(document, "{ This is a document comment }") : NULL;
+    const char *second = document ? strstr(document, "(* Inline comment *)") : NULL;
+    ASSERT(first && second && first < second,
+           "document mode preserves comment text and encounter order");
+
+    size_t wire_len = 0;
+    char *wire = hon_serialise(doc, HON_MODE_WIRE, &wire_len);
+    ASSERT(wire && strstr(wire, "document comment") == NULL &&
+           strstr(wire, "Inline comment") == NULL,
+           "wire mode strips preserved comments");
+
+    free(document);
+    free(wire);
     hon_doc_free(doc);
 }
 

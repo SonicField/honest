@@ -59,7 +59,7 @@ Comments may appear between any two tokens except within string literals.
 
 Comments MUST NOT nest. A `{` inside a brace comment is literal, not a nested comment opener.
 
-**Document mode vs wire mode.** In document mode (on-disk files, human-readable output), comments are preserved and associated with the nearest declaration or data node. In wire mode (agent-to-agent transmission), comments are stripped. Comments MUST NOT carry semantic information required for correct interpretation. Use typed fields for data that must survive wire transmission.
+**Document mode vs wire mode.** In document mode (on-disk files, human-readable output), comment text and encounter order are preserved. A serialiser MAY normalise comment placement while formatting the document. In wire mode (agent-to-agent transmission), comments are stripped. Comments MUST NOT carry semantic information required for correct interpretation. Use typed fields for data that must survive wire transmission.
 
 ### 2.4 Identifiers
 

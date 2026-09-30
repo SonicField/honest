@@ -40,3 +40,22 @@ def test_non_finite_real_is_not_serialised(value):
     doc.vars[0].value.real = value
     with pytest.raises(ValueError):
         honest.serialise(doc)
+
+
+def test_document_mode_preserves_comments_in_encounter_order():
+    source = (
+        "{ document comment }\n"
+        "type\n"
+        "  (* declaration comment *)\n"
+        "  N = Integer;\n"
+        "var n : N = 1;\n"
+    )
+    doc = honest.parse(source)
+    document = honest.serialise(doc)
+    wire = honest.serialise(doc, wire=True)
+
+    assert document.index("{ document comment }") < document.index(
+        "(* declaration comment *)"
+    )
+    assert "document comment" not in wire
+    assert "declaration comment" not in wire

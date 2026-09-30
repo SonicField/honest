@@ -37,6 +37,7 @@ class Parser:
         self._allow_trailing = allow_trailing
         self._types: dict[str, HonType] = {}
         self._type_list: list[HonType] = []
+        self._comments: list[str] = []
         self._depth = 0
 
         # Register built-in primitives
@@ -45,7 +46,10 @@ class Parser:
             self._types[name] = t
 
     def _next(self) -> Token:
-        t = self._lex.next_skip_comments()
+        t = self._lex.next()
+        while t.kind == TokenKind.COMMENT:
+            self._comments.append(t.text)
+            t = self._lex.next()
         if t.kind == TokenKind.ERROR:
             raise ParseError(t.text, t.line, t.col)
         return t
@@ -53,7 +57,7 @@ class Parser:
     def _peek(self) -> Token:
         t = self._lex.peek()
         while t.kind == TokenKind.COMMENT:
-            self._lex.next()
+            self._comments.append(self._lex.next().text)
             t = self._lex.peek()
         if t.kind == TokenKind.ERROR:
             raise ParseError(t.text, t.line, t.col)
@@ -476,7 +480,10 @@ class Parser:
             if trailing.kind != TokenKind.EOF:
                 raise self._error("unexpected tokens after end of document", trailing)
 
-        return Document(types=list(self._type_list), vars=variables)
+        return Document(
+            types=list(self._type_list), vars=variables,
+            comments=list(self._comments),
+        )
 
 
 def parse(src: str) -> Document:

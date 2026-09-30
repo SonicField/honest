@@ -345,7 +345,10 @@ type
   Confidence = (Certain, High, Moderate, Low, Speculative);
 ```
 
-Comments are preserved in documents on disk but stripped when messages are sent between agents. They are for humans, not machines. Do not put information in comments that a receiver needs to interpret the data — use typed fields instead.
+Comment text and encounter order are preserved in document mode, although a
+formatter may normalise placement. Comments are stripped when messages are sent
+between agents. They are for humans, not machines. Do not put information in
+comments that a receiver needs to interpret the data — use typed fields instead.
 
 ---
 

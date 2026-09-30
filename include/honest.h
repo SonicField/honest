@@ -222,6 +222,8 @@ typedef struct {
     uint32_t       type_count;
     hon_variable  *vars;
     uint32_t       var_count;
+    hon_str        *comments;    /* source comments in encounter order */
+    uint32_t        comment_count;
     hon_arena     *arena;       /* owns all memory */
 } hon_document;
 

@@ -331,6 +331,13 @@ char *hon_serialise(const hon_document *doc, hon_serial_mode mode, size_t *out_l
     outbuf b;
     buf_init(&b, mode);
 
+    if (mode == HON_MODE_DOCUMENT) {
+        for (uint32_t i = 0; i < doc->comment_count; i++) {
+            buf_append(&b, doc->comments[i].data, doc->comments[i].len);
+            buf_char(&b, '\n');
+        }
+    }
+
     /* Declarations section */
     buf_str(&b, "type");
     b.indent++;

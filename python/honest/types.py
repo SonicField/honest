@@ -203,6 +203,7 @@ class Variable:
 class Document:
     types: list[HonType] = field(default_factory=list)
     vars: list[Variable] = field(default_factory=list)
+    comments: list[str] = field(default_factory=list)
 
     def __getitem__(self, key):
         """Dict-style access for variables with auto-unwrapping."""
