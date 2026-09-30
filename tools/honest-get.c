@@ -69,6 +69,24 @@ static const hon_value *find_field(const hon_value *v, hon_str name) {
     return NULL;
 }
 
+static int parse_sequence_index(const char *text, uint32_t count,
+                                uint32_t *index) {
+    uint32_t value = 0;
+
+    if (!text || text[0] == '\0' || !index) return -1;
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        uint32_t digit;
+        if (*p < '0' || *p > '9') return -1;
+        digit = (uint32_t)(*p - '0');
+        if (value > (UINT32_MAX - digit) / 10) return -1;
+        value = value * 10 + digit;
+    }
+    if (value >= count) return -1;
+
+    *index = value;
+    return 0;
+}
+
 static const hon_value *navigate_path(const hon_value *val, const char *field_path) {
     char *pathbuf = strdup(field_path);
     if (!pathbuf) return NULL;
@@ -76,10 +94,9 @@ static const hon_value *navigate_path(const hon_value *val, const char *field_pa
     char *tok = strtok(pathbuf, ".");
     while (tok && val) {
         /* Numeric index for sequences */
-        char *endp;
-        long idx = strtol(tok, &endp, 10);
-        if (*endp == '\0' && val->kind == HON_VAL_SEQUENCE) {
-            if (idx >= 0 && (uint32_t)idx < val->u.sequence.count)
+        if (val->kind == HON_VAL_SEQUENCE) {
+            uint32_t idx;
+            if (parse_sequence_index(tok, val->u.sequence.count, &idx) == 0)
                 val = &val->u.sequence.elements[idx];
             else
                 val = NULL;

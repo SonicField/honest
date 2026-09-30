@@ -216,9 +216,9 @@ The format specification and both reference implementations are complete.
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | Complete — 889 assertions locally green |
+| C library (libhonest) | Complete — 891 assertions locally green |
 | Python library | Complete — 113 tests locally green |
-| CLI tools | Complete — 66 black-box checks locally green |
+| CLI tools | Complete — 68 black-box checks locally green |
 | Cross-impl conformance | Complete — 6 shipped fixtures plus 54 boundary checks locally green |
 
 The C assertions are supplemented by black-box checks of all five executables.

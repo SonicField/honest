@@ -32,7 +32,7 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 
 | Suite | File | Tests | What it covers |
 |-------|------|-------|----------------|
-| Accessors | `test_accessors.c` | 71 | `hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char` |
+| Accessors | `test_accessors.c` | 73 | `hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char` |
 | Antifragile | `test_antifragile.c` | 76 | Unknown types, rulebook divergence, registry extension |
 | Conformance | `test_conformance.c` | 215 | Round-trip fidelity, canonical form, edge cases |
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
@@ -167,7 +167,7 @@ make audit
 ```
 
 This executes:
-1. `make test` — 889 C assertions, 66 CLI checks, 113 Python tests, both
+1. `make test` — 891 C assertions, 68 CLI checks, 113 Python tests, both
    conformance levels, and the 54-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build

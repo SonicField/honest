@@ -40,6 +40,18 @@ expect_empty_stdout() {
     fi
 }
 
+expect_single_empty_line() {
+    local description=$1
+    local byte_count
+    tests=$((tests + 1))
+    byte_count=$(wc -c <"$tmp_dir/stdout")
+    if [[ $byte_count -eq 1 && $(<"$tmp_dir/stdout") == "" ]]; then
+        passed=$((passed + 1))
+    else
+        fail "$description (stdout was not exactly one empty line)"
+    fi
+}
+
 expect_stdout() {
     local expected=$1
     local description=$2
@@ -107,6 +119,11 @@ expect_empty_stdout "fmt emits no output for ambiguous input"
 expect_status 2 "extract rejects multiple input paths" \
     "$bin_dir/honest-extract" "$valid" "$valid"
 expect_empty_stdout "extract emits no output for ambiguous input"
+
+expect_status 1 "get rejects an overflowing sequence index" \
+    "$bin_dir/honest-get" "$root/examples/04-sequences.honest" \
+    scores 4294967296
+expect_single_empty_line "overflowing sequence index emits one missing-value line"
 
 expect_status 2 "parse rejects quiet plus verbose" \
     "$bin_dir/honest-parse" --quiet --verbose "$valid"

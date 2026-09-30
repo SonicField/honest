@@ -21,6 +21,24 @@ static const hon_variable *find_var(const hon_document *doc, const char *var_nam
     return NULL;
 }
 
+static int parse_sequence_index(const char *text, uint32_t count,
+                                uint32_t *index) {
+    uint32_t value = 0;
+
+    if (!text || text[0] == '\0' || !index) return -1;
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        uint32_t digit;
+        if (*p < '0' || *p > '9') return -1;
+        digit = (uint32_t)(*p - '0');
+        if (value > (UINT32_MAX - digit) / 10) return -1;
+        value = value * 10 + digit;
+    }
+    if (value >= count) return -1;
+
+    *index = value;
+    return 0;
+}
+
 /* Navigate a dot-separated field path from a value.
  * Supports record field names and numeric sequence indices. */
 static const hon_value *navigate(const hon_value *val, const char *field_name) {
@@ -54,9 +72,8 @@ static const hon_value *navigate(const hon_value *val, const char *field_name) {
             }
             cur = found;
         } else if (cur->kind == HON_VAL_SEQUENCE) {
-            char *endp;
-            long idx = strtol(tok, &endp, 10);
-            if (*endp == '\0' && idx >= 0 && (uint32_t)idx < cur->u.sequence.count)
+            uint32_t idx;
+            if (parse_sequence_index(tok, cur->u.sequence.count, &idx) == 0)
                 cur = &cur->u.sequence.elements[idx];
             else
                 cur = NULL;

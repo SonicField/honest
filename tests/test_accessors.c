@@ -236,6 +236,23 @@ static void test_get_long_negative(void) {
     hon_doc_free(doc);
 }
 
+static void test_sequence_index_overflow_rejected(void) {
+    const char *src =
+        "type\n"
+        "  Values = sequence of LongInt;\n"
+        "var values : Values = (10; 20);\n";
+
+    hon_diag_list diags = {0};
+    hon_document *doc = hon_parse(src, strlen(src), &diags);
+    ASSERT(doc != NULL, "sequence index overflow: parse succeeds");
+
+    long val = 0;
+    int rc = hon_get_long(doc, "values", "4294967296", &val);
+    ASSERT(rc == -1, "sequence index overflow: oversized index returns -1");
+
+    hon_doc_free(doc);
+}
+
 /* ================================================================
  * Cross-type convenience: hon_get_string on enum
  * ================================================================ */
@@ -599,6 +616,7 @@ int main(void) {
     /* Integer boundaries */
     test_get_long_zero();
     test_get_long_negative();
+    test_sequence_index_overflow_rejected();
 
     /* Cross-type convenience */
     test_get_string_reads_enum();
