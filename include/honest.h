@@ -261,11 +261,22 @@ typedef struct hon_registry hon_registry;
 
 /* ---- Parser ---- */
 
+/* Diagnostic parser: may return a partial document alongside error diagnostics. */
 hon_document *hon_parse(const char *src, size_t len, hon_diag_list *diags);
 hon_document *hon_parse_with_registry(const char *src, size_t len,
                                        const hon_registry *reg,
                                        hon_diag_list *diags);
 hon_document *hon_parse_file(const char *path, hon_diag_list *diags);
+/* Strict parsers: return NULL if parsing fails or the input has the wrong shape. */
+hon_document *hon_parse_document(const char *src, size_t len,
+                                 hon_diag_list *diags);
+hon_document *hon_parse_document_with_registry(const char *src, size_t len,
+                                                const hon_registry *reg,
+                                                hon_diag_list *diags);
+hon_document *hon_parse_rulebook(const char *src, size_t len,
+                                 hon_diag_list *diags);
+hon_document *hon_parse_document_file(const char *path, hon_diag_list *diags);
+hon_document *hon_parse_rulebook_file(const char *path, hon_diag_list *diags);
 
 /* ---- Serialiser ---- */
 

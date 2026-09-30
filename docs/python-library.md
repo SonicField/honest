@@ -45,22 +45,27 @@ wire = honest.serialise(doc, wire=True)   # compact wire mode
 
 ## API Reference
 
-### `honest.parse(text) -> Document`
+### `honest.parse_document(text) -> Document`
 
-Parse an Honest document from a string.
+Strictly parse an Honest document from a string, requiring a data section.
 
 ```python
-doc = honest.parse(text)
+doc = honest.parse_document(text)
 ```
 
 Raises `honest.ParseError` on invalid input. The error includes line and column information.
 
-### `honest.parse_file(path) -> Document`
+Use `honest.parse_rulebook(text)` for declarations-only input. The corresponding
+file helpers are `honest.parse_document_file(path)` and
+`honest.parse_rulebook_file(path)`. The legacy `parse` and `parse_file`
+functions accept either shape.
+
+### `honest.parse_document_file(path) -> Document`
 
 Parse an Honest document from a file.
 
 ```python
-doc = honest.parse_file("message.honest")
+doc = honest.parse_document_file("message.honest")
 ```
 
 ### `honest.serialise(doc, wire=False) -> str`

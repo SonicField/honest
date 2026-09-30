@@ -101,6 +101,17 @@ malformed="$tmp_dir/malformed.honest"
 printf '%s\n' 'type X = Integer; var x : X = nope;' >"$malformed"
 trailing="$tmp_dir/trailing.honest"
 printf '%s\n' 'type X = Integer; var x : X = 1; trailing' >"$trailing"
+rulebook="$tmp_dir/types.honest-rulebook"
+printf '%s\n' 'type X = Integer;' >"$rulebook"
+
+expect_status 1 "document mode requires a data section" \
+    "$bin_dir/honest-parse" --document "$rulebook"
+expect_status 0 "rulebook mode accepts declarations only" \
+    "$bin_dir/honest-parse" --rulebook "$rulebook"
+expect_status 1 "rulebook mode rejects variable assignments" \
+    "$bin_dir/honest-parse" --rulebook "$valid"
+expect_status 2 "parse modes are mutually exclusive" \
+    "$bin_dir/honest-parse" --document --rulebook "$valid"
 
 expect_status 1 "fmt rejects a partial parse" \
     "$bin_dir/honest-fmt" "$malformed"

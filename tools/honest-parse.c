@@ -1,8 +1,8 @@
 /*
  * honest-parse — Parse and validate an Honest document.
  *
- * Usage: honest-parse <file.honest>
- *        honest-parse -          (read from stdin)
+ * Usage: honest-parse [--document | --rulebook] <file.honest>
+ *        honest-parse [--document | --rulebook] -  (read from stdin)
  *
  * Exits 0 if valid, 1 if errors found. Prints diagnostics to stderr.
  * With -q (quiet), suppresses output; with -v (verbose), prints parsed structure.
@@ -15,13 +15,21 @@
 #include <string.h>
 
 static void usage(FILE *out, const char *prog) {
-    fprintf(out, "Usage: %s [-q | -v] <file.honest | ->\n", prog);
+    fprintf(out, "Usage: %s [-q | -v] [--document | --rulebook] "
+                 "<file.honest | ->\n", prog);
 }
+
+typedef enum {
+    INPUT_EITHER,
+    INPUT_DOCUMENT,
+    INPUT_RULEBOOK,
+} input_kind;
 
 int main(int argc, char **argv) {
     if (hon_cli_init() < 0) return 1;
     bool quiet   = false;
     bool verbose = false;
+    input_kind parse_kind = INPUT_EITHER;
     const char *path = NULL;
 
     for (int i = 1; i < argc; i++) {
@@ -29,6 +37,20 @@ int main(int argc, char **argv) {
             quiet = true;
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
+        } else if (strcmp(argv[i], "--document") == 0) {
+            if (parse_kind != INPUT_EITHER) {
+                fprintf(stderr, "--document and --rulebook are mutually exclusive\n");
+                usage(stderr, argv[0]);
+                return 2;
+            }
+            parse_kind = INPUT_DOCUMENT;
+        } else if (strcmp(argv[i], "--rulebook") == 0) {
+            if (parse_kind != INPUT_EITHER) {
+                fprintf(stderr, "--document and --rulebook are mutually exclusive\n");
+                usage(stderr, argv[0]);
+                return 2;
+            }
+            parse_kind = INPUT_RULEBOOK;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             usage(stdout, argv[0]);
             return hon_cli_finish_stdout() == 0 ? 0 : 1;
@@ -64,10 +86,20 @@ int main(int argc, char **argv) {
         size_t len;
         char *src = hon_cli_read_all(stdin, &len);
         if (!src) { fprintf(stderr, "Failed to read stdin\n"); return 1; }
-        doc = hon_parse(src, len, &diags);
+        if (parse_kind == INPUT_DOCUMENT)
+            doc = hon_parse_document(src, len, &diags);
+        else if (parse_kind == INPUT_RULEBOOK)
+            doc = hon_parse_rulebook(src, len, &diags);
+        else
+            doc = hon_parse(src, len, &diags);
         free(src);
     } else {
-        doc = hon_parse_file(path, &diags);
+        if (parse_kind == INPUT_DOCUMENT)
+            doc = hon_parse_document_file(path, &diags);
+        else if (parse_kind == INPUT_RULEBOOK)
+            doc = hon_parse_rulebook_file(path, &diags);
+        else
+            doc = hon_parse_file(path, &diags);
     }
 
     bool has_errors = hon_cli_has_errors(&diags);

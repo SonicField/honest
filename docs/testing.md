@@ -33,18 +33,18 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 | Suite | File | Tests | What it covers |
 |-------|------|-------|----------------|
 | Accessors | `test_accessors.c` | 73 | `hon_get_string`, `hon_get_long`, `hon_get_bool`, `hon_get_real`, `hon_get_char` |
-| Antifragile | `test_antifragile.c` | 76 | Unknown types, rulebook divergence, registry extension |
-| Conformance | `test_conformance.c` | 216 | Round-trip fidelity, canonical form, edge cases |
+| Antifragile | `test_antifragile.c` | 83 | Unknown types, rulebook divergence, registry extension |
+| Conformance | `test_conformance.c` | 217 | Round-trip fidelity, canonical form, edge cases |
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
-| Parser | `test_parser.c` | 133 | Type declarations, data values, schema validation, error recovery |
+| Parser | `test_parser.c` | 141 | Type declarations, data values, schema validation, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
-| Strict values | `test_strict_values.c` | 233 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
+| Strict values | `test_strict_values.c` | 234 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
 | Tools | `test_tools.c` | 61 | CLI integration for get, build, and extract |
 
 `tests/test_cli.sh` adds black-box contract checks for all five installed
 programs, including malformed input, argument boundaries, Unicode construction,
 format idempotence, closed pipes, and output failures where `/dev/full` is
-available. It currently contains 66 checks.
+available. It currently contains 76 checks.
 
 ### Running C Tests
 
@@ -167,7 +167,7 @@ make audit
 ```
 
 This executes:
-1. `make test` — 933 C assertions, 72 CLI checks, 137 Python tests, both
+1. `make test` — 941 C assertions, 76 CLI checks, 138 Python tests, both
    conformance levels, and the 66-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build

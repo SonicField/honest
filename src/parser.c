@@ -1366,26 +1366,105 @@ hon_document *hon_parse_with_registry(const char *src, size_t len,
     return doc;
 }
 
-hon_document *hon_parse_file(const char *path, hon_diag_list *diags) {
+static bool diagnostics_have_errors(const hon_diag_list *diags) {
+    if (!diags) return false;
+    for (uint32_t i = 0; i < diags->count; i++) {
+        if (diags->items[i].level == HON_DIAG_ERROR) return true;
+    }
+    return false;
+}
+
+static hon_document *validate_strict_result(hon_document *doc,
+                                            hon_diag_list *working_diags,
+                                            hon_diag_list *caller_diags,
+                                            bool require_data) {
+    if (!doc) {
+        if (!caller_diags) hon_diag_free(working_diags);
+        return NULL;
+    }
+
+    bool wrong_shape = require_data ? doc->var_count == 0 : doc->var_count > 0;
+    if (wrong_shape) {
+        hon_diag_push(working_diags, doc->arena, HON_DIAG_ERROR, 1, 1,
+                      require_data
+                          ? "document requires a data section"
+                          : "rulebook must not contain variable assignments");
+    }
+
+    if (wrong_shape || diagnostics_have_errors(working_diags)) {
+        if (caller_diags) diag_detach_from_arena(caller_diags);
+        hon_doc_free(doc);
+        return NULL;
+    }
+    return doc;
+}
+
+hon_document *hon_parse_document(const char *src, size_t len,
+                                 hon_diag_list *diags) {
+    hon_diag_list local_diags = {0};
+    hon_diag_list *working_diags = diags ? diags : &local_diags;
+    hon_document *doc = hon_parse(src, len, working_diags);
+    return validate_strict_result(doc, working_diags, diags, true);
+}
+
+hon_document *hon_parse_document_with_registry(const char *src, size_t len,
+                                                const hon_registry *reg,
+                                                hon_diag_list *diags) {
+    hon_diag_list local_diags = {0};
+    hon_diag_list *working_diags = diags ? diags : &local_diags;
+    hon_document *doc = hon_parse_with_registry(src, len, reg, working_diags);
+    return validate_strict_result(doc, working_diags, diags, true);
+}
+
+hon_document *hon_parse_rulebook(const char *src, size_t len,
+                                 hon_diag_list *diags) {
+    hon_diag_list local_diags = {0};
+    hon_diag_list *working_diags = diags ? diags : &local_diags;
+    hon_document *doc = hon_parse(src, len, working_diags);
+    return validate_strict_result(doc, working_diags, diags, false);
+}
+
+typedef hon_document *(*file_parser)(const char *, size_t, hon_diag_list *);
+
+static hon_document *parse_file_using(const char *path, hon_diag_list *diags,
+                                      file_parser parse_source) {
+    if (!path || !parse_source) return NULL;
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
 
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
     long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (fsize < 0) { fclose(f); return NULL; }
+    if (fsize < 0 || fseek(f, 0, SEEK_SET) != 0 ||
+        (uintmax_t)fsize >= SIZE_MAX) {
+        fclose(f);
+        return NULL;
+    }
 
     char *buf = malloc((size_t)fsize + 1);
     if (!buf) { fclose(f); return NULL; }
 
     size_t nread = fread(buf, 1, (size_t)fsize, f);
-    fclose(f);
+    if (ferror(f) || fclose(f) != 0) {
+        free(buf);
+        return NULL;
+    }
     buf[nread] = '\0';
 
-    hon_document *doc = hon_parse(buf, nread, diags);
+    hon_document *doc = parse_source(buf, nread, diags);
     free(buf);
     return doc;
+}
+
+hon_document *hon_parse_file(const char *path, hon_diag_list *diags) {
+    return parse_file_using(path, diags, hon_parse);
+}
+
+hon_document *hon_parse_document_file(const char *path, hon_diag_list *diags) {
+    return parse_file_using(path, diags, hon_parse_document);
+}
+
+hon_document *hon_parse_rulebook_file(const char *path, hon_diag_list *diags) {
+    return parse_file_using(path, diags, hon_parse_rulebook);
 }
 
 void hon_doc_free(hon_document *doc) {

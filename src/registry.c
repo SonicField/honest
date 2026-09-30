@@ -344,7 +344,7 @@ int hon_registry_load(hon_registry *reg, const char *path, hon_diag_list *diags)
     if (!reg || !path) return -1;
     hon_diag_list local_diags = {0};
     hon_diag_list *parse_diags = diags ? diags : &local_diags;
-    hon_document *doc = hon_parse_file(path, parse_diags);
+    hon_document *doc = hon_parse_rulebook_file(path, parse_diags);
     if (!doc) {
         if (!diags) hon_diag_free(&local_diags);
         return -1;

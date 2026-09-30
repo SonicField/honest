@@ -20,6 +20,8 @@ type
     file    : String;     { path to .honest file, or '-' for stdin }
     quiet   : Boolean;    { -q, --quiet: suppress diagnostics }
     verbose : Boolean;    { -v, --verbose: print parsed structure }
+    document : Boolean;   { --document: require one or more variables }
+    rulebook : Boolean;   { --rulebook: require declarations only }
     help    : Boolean;    { -h, --help: show usage }
   end;
 ```
@@ -30,6 +32,8 @@ type
 - On success, prints `OK: N type(s), M variable(s)` to stdout.
 - With `--verbose`, prints detailed type listings (kind, fields) and variable declarations.
 - With `--quiet`, suppresses all diagnostic output.
+- With `--document`, rejects declarations-only input.
+- With `--rulebook`, rejects any variable assignment.
 
 ### Exit Codes
 

@@ -507,7 +507,35 @@ def parse(src: str) -> Document:
     return Parser(src).parse()
 
 
+def parse_document(src: str) -> Document:
+    """Strictly parse a document, requiring at least one data assignment."""
+    document = parse(src)
+    if not document.vars:
+        raise ParseError("document requires a data section", 1, 1)
+    return document
+
+
+def parse_rulebook(src: str) -> Document:
+    """Strictly parse a declarations-only rulebook."""
+    document = parse(src)
+    if document.vars:
+        raise ParseError("rulebook must not contain variable assignments", 1, 1)
+    return document
+
+
 def parse_file(path: str) -> Document:
     """Parse an Honest document from a file."""
     with open(path, "r", encoding="utf-8") as f:
         return parse(f.read())
+
+
+def parse_document_file(path: str) -> Document:
+    """Strictly parse a document file requiring a data section."""
+    with open(path, "r", encoding="utf-8") as f:
+        return parse_document(f.read())
+
+
+def parse_rulebook_file(path: str) -> Document:
+    """Strictly parse a declarations-only rulebook file."""
+    with open(path, "r", encoding="utf-8") as f:
+        return parse_rulebook(f.read())

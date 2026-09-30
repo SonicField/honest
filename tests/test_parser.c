@@ -697,6 +697,43 @@ static void test_trailing_tokens_rejected(void) {
                     "tokens after a complete document are rejected");
 }
 
+static void test_strict_document_and_rulebook_entry_points(void) {
+    const char *rulebook = "type N = Integer;";
+    const char *document = "type N = Integer; var n : N = 1;";
+    const char *invalid = "type N = Integer; var n : N = nope;";
+    hon_diag_list diags = {0};
+
+    hon_document *doc = hon_parse_document(
+        rulebook, strlen(rulebook), &diags);
+    ASSERT(doc == NULL, "strict document parser requires data");
+    ASSERT(has_errors(&diags), "missing document data reports an error");
+    hon_diag_free(&diags);
+
+    diags = (hon_diag_list){0};
+    doc = hon_parse_rulebook(rulebook, strlen(rulebook), &diags);
+    ASSERT(doc != NULL && !has_errors(&diags),
+           "strict rulebook parser accepts declarations only");
+    if (doc) hon_doc_free(doc);
+
+    diags = (hon_diag_list){0};
+    doc = hon_parse_rulebook(document, strlen(document), &diags);
+    ASSERT(doc == NULL, "strict rulebook parser rejects data");
+    ASSERT(has_errors(&diags), "rulebook data reports an error");
+    hon_diag_free(&diags);
+
+    diags = (hon_diag_list){0};
+    doc = hon_parse_document(document, strlen(document), &diags);
+    ASSERT(doc != NULL && !has_errors(&diags),
+           "strict document parser accepts declarations and data");
+    if (doc) hon_doc_free(doc);
+
+    diags = (hon_diag_list){0};
+    doc = hon_parse_document(invalid, strlen(invalid), &diags);
+    ASSERT(doc == NULL, "strict document parser never returns partial errors");
+    ASSERT(has_errors(&diags), "strict parse retains error diagnostics");
+    hon_diag_free(&diags);
+}
+
 static void test_reserved_boolean_type_rejected(void) {
     const char *src = "type Boolean = (Yes, No);";
     assert_rejected(src, strlen(src),
@@ -799,6 +836,7 @@ int main(void) {
     test_declarations_are_required();
     test_required_semicolons();
     test_trailing_tokens_rejected();
+    test_strict_document_and_rulebook_entry_points();
     test_reserved_boolean_type_rejected();
     test_large_declarations_are_not_truncated();
 

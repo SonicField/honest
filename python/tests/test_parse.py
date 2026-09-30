@@ -146,6 +146,18 @@ def test_declarations_only():
     assert len(doc.vars) == 0
 
 
+def test_explicit_document_and_rulebook_modes():
+    rulebook = "type N = Integer;"
+    document = "type N = Integer; var n : N = 1;"
+
+    assert honest.parse_rulebook(rulebook).vars == []
+    assert honest.parse_document(document)["n"] == 1
+    with pytest.raises(honest.ParseError, match="data section"):
+        honest.parse_document(rulebook)
+    with pytest.raises(honest.ParseError, match="variable assignments"):
+        honest.parse_rulebook(document)
+
+
 def test_multiple_vars():
     doc = honest.parse("""
 type

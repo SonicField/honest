@@ -23,15 +23,17 @@ authority for Honest syntax and data semantics.
 ## `honest-parse`
 
 ```text
-honest-parse [-q | -v] <file.honest | ->
+honest-parse [-q | -v] [--document | --rulebook] <file.honest | ->
 ```
 
 The command validates one document. Normal success prints its type and variable
 counts. `--verbose` also lists declarations. `--quiet` suppresses parse
 diagnostics and successful output; operational failures may still be reported.
-The two modes are mutually exclusive. A declarations section must contain at
-least one declaration; a declarations-only input is accepted as a rulebook,
-while a normal document contains at least one variable.
+The quiet and verbose modes are mutually exclusive. `--document` strictly
+requires at least one variable assignment; `--rulebook` strictly rejects all
+variable assignments. Those two input modes are mutually exclusive. Without
+either input mode, declarations-only rulebooks and normal documents are both
+accepted for compatibility.
 
 - 0: valid document
 - 1: input, parse, or output failure

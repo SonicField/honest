@@ -88,11 +88,11 @@ compiles and links a small program using only the installed `honest.h` and
 ```c
 #include "honest.h"
 
-/* Parse a document */
+/* Strictly parse a document (never returns a partial/error result) */
 hon_diag_list diags = {0};
-hon_document *doc = hon_parse(src, len, &diags);
-if (diags.count > 0) {
-    /* handle warnings/errors */
+hon_document *doc = hon_parse_document(src, len, &diags);
+if (!doc) {
+    /* inspect diags, then call hon_diag_free(&diags) */
 }
 
 /* Extract a field value */
@@ -115,8 +115,8 @@ hon_doc_free(doc);
 ```python
 import honest
 
-# Parse a document
-doc = honest.parse(text)
+# Strictly parse a document (requires at least one variable)
+doc = honest.parse_document(text)
 print(doc['result'].summary)    # dict access on doc, attribute access on values
 
 # Access fields
@@ -216,9 +216,9 @@ The format specification and both reference implementations are complete.
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | Complete — 933 assertions locally green |
-| Python library | Complete — 137 tests locally green |
-| CLI tools | Complete — 72 black-box checks locally green |
+| C library (libhonest) | Complete — 941 assertions locally green |
+| Python library | Complete — 138 tests locally green |
+| CLI tools | Complete — 76 black-box checks locally green |
 | Cross-impl conformance | Complete — 6 shipped fixtures plus 66 boundary checks locally green |
 
 The C assertions are supplemented by black-box checks of all five executables.
