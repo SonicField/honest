@@ -14,6 +14,9 @@ authority for Honest syntax and data semantics.
 - `-` means standard input wherever an input path is accepted.
 - Inputs are read in full before parsing; these tools are not streaming
   parsers and do not impose a fixed document-size limit.
+- Input documents must be valid UTF-8 throughout, including comments and
+  whitespace between tokens. Identifiers use the specification's ASCII
+  grammar; non-ASCII text belongs in `String` or `Char` values.
 - Error diagnostics are intended for people and are not a stable
   machine-readable interface.
 
@@ -26,7 +29,9 @@ honest-parse [-q | -v] <file.honest | ->
 The command validates one document. Normal success prints its type and variable
 counts. `--verbose` also lists declarations. `--quiet` suppresses parse
 diagnostics and successful output; operational failures may still be reported.
-The two modes are mutually exclusive.
+The two modes are mutually exclusive. A declarations section must contain at
+least one declaration; a declarations-only input is accepted as a rulebook,
+while a normal document contains at least one variable.
 
 - 0: valid document
 - 1: input, parse, or output failure
@@ -82,7 +87,14 @@ indices must be decimal, contiguous from zero, and below 256.
 The command accepts at most 256 assignments and 32 path components. It builds
 primitive, enumeration, ordinary record, and sequence values. Construction of
 variant-record arms is not currently supported. A `Char` value must contain
-exactly one Unicode scalar. All assignment arguments must be valid UTF-8.
+exactly one Unicode scalar. Integer inputs must fit their declared primitive
+range. `Real` inputs must convert completely to a finite double; overflow and
+non-finite results are errors. All assignment arguments must be valid UTF-8.
+
+Parsed record values are exact and ordered: every declared fixed field and
+every field of the selected variant arm must appear once in declaration order,
+with no undeclared fields. Variant discriminants resolve to an enumeration or
+`Boolean`, and the tag selects the corresponding arm.
 
 The output variable is named `result` unless `--var-name` supplies a valid
 Honest identifier. Existing variables in a rulebook are retained, so

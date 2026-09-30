@@ -171,3 +171,81 @@ Final local verification on Linux ARM64 with GCC 11.5 observed:
 The configured Ubuntu x86-64/ARM64 GCC/Clang and macOS Intel/ARM64 jobs have not
 run because this workstream was not authorised to push. Cross-platform support
 therefore remains configured but externally unverified pending a GitHub CI run.
+
+## Second hardening audit
+
+**Date:** 2026-09-30
+**Plan:** `/home/alexturner/plans/honest-hardening-plan.md`, T1–T14
+
+An independent review after `912365f` expanded the audit to both parsers, both
+serialisers, the builder, extraction fallback, large-output pipe failure, and
+cross-language rejection parity. Failing tests reproduced these defects before
+repair:
+
+- all five CLIs terminated with signal status 141 when a reader closed a pipe;
+- fixed and variant record values were not fully checked against declarations;
+- invalid variant definitions and tags were accepted;
+- C truncated multi-scalar `Char` values, accepted invalid UTF-8, saturated an
+  overflowing `LongInt`, and accepted incomplete or overflowing real values;
+- Python accepted non-ASCII identifiers and out-of-range integers, leaked a
+  builtin `ValueError` for malformed reals, and emitted malformed `Char` text;
+- extraction stopped at malformed numeric candidates rather than finding a
+  later valid document; and
+- both implementations accepted an empty `type` section.
+
+The formal real-literal grammar exposed one further issue while constructing
+T14: both parsers accepted exponent-only `1e2`, and both serialisers could emit
+`0` for a `Real`. Focused tests failed in C, Python, and the builder before the
+repair; reals now require the grammar's decimal point and integral-valued reals
+serialise with `.0`.
+
+### Second-wave commits
+
+- `0002075` — report closed output pipes as operational failures;
+- `c807583` — enforce the shared C parser invariants for T2–T8 and T13;
+- `ac07e83` — align Python lexical, numeric, and declaration validation;
+- `d554021` — align Python fixed and variant record validation;
+- `374d7a6` — round-trip every valid Python `Char` scalar;
+- `67289ce` — verify extraction skips malformed candidates;
+- `bd03cc1` — add the 224-check strict C corpus and definition-time variant
+  completeness warning;
+- `4a1905c` — prevent the builder from producing non-finite reals;
+- `1dbb8d8` — add the shared valid/invalid boundary corpus;
+- `872f8a2` — exercise every staged CLI and compile/link an installed-library
+  consumer;
+- `1c422bb` — enforce the specified real grammar and valid real serialisation;
+- `d40a53b` — preserve invalid-UTF-8 diagnostics without leaked ownership.
+
+The C parser changes for T2–T8 and the C half of T13 share one type-directed
+value-validation path and were preserved in one commit after an interrupted
+work session. This is the one deviation from the plan's finer commit sequence.
+
+The specification distinguishes normal documents, which require data, from
+declarations-only rulebooks. Both public libraries expose one parse entry point
+for both forms; there is no separate rulebook parse API. The repair therefore
+rejects bare/comment-only `type` while retaining inputs with at least one type
+declaration and no variables. Inventing a new API would have been a format and
+interface redesign outside this hardening scope.
+
+### Final local evidence
+
+On the Linux ARM64 development host with GCC 11.5:
+
+- `make test PYTHON=/tmp/honest-vp-venv/bin/python`: passed with 889/889 C
+  assertions, 66/66 black-box CLI checks, and 113/113 Python tests;
+- original cross-implementation levels 1–3: 6/6 fixtures passed at each level;
+- the new boundary corpus: 54/54 checks passed, including byte-identical wire
+  output, mutual parsing, idempotence, and invalid-input rejection parity;
+- `make sanitize`: 889/889 C assertions and 66/66 CLI checks passed under the
+  combined AddressSanitizer and UndefinedBehaviorSanitizer build;
+- `make analyze ANALYZER_CC=gcc`: completed with `-fanalyzer` and warnings as
+  errors;
+- `shellcheck tests/*.sh scripts/*.sh`: passed;
+- `make install-check`: all five staged programs ran help and representative
+  commands, and a consumer compiled and linked using only staged `honest.h` and
+  `libhonest.a`;
+- every local Markdown link resolved; and
+- `git diff --check` passed.
+
+The six explicitly pinned GitHub jobs remain configuration evidence, not runtime
+evidence, until this unpushed commit is published and Actions reports results.

@@ -17,9 +17,11 @@ Or run each verification step individually:
 make check                                    # C suites and black-box CLI checks
 make sanitize                                 # C/CLI tests under ASan and UBSan
 make analyze                                  # GCC static analysis build
-python3 -m pytest python/tests/ -v            # Python tests (34 tests)
+python3 -m pytest python/tests/ -v            # Python tests (113 tests)
 bash scripts/cross-impl-conformance.sh        # Cross-impl conformance (L1+L2)
 bash scripts/cross-impl-conformance-level3.sh # Cross-impl conformance (L3)
+bash scripts/cross-impl-boundaries.sh         # Shared valid/invalid boundary corpus
+make install-check                            # Staged CLI/library/header smoke test
 ```
 
 ---
@@ -34,13 +36,15 @@ All C tests live in `tests/`. Each file is a standalone test program that links 
 | Antifragile | `test_antifragile.c` | 76 | Unknown types, rulebook divergence, registry extension |
 | Conformance | `test_conformance.c` | 215 | Round-trip fidelity, canonical form, edge cases |
 | Lexer | `test_lexer.c` | 66 | Token types, string escapes, comments, Unicode |
-| Parser | `test_parser.c` | 92 | Type declarations, data values, error recovery |
+| Parser | `test_parser.c` | 110 | Type declarations, data values, schema validation, error recovery |
 | Roundtrip | `test_roundtrip.c` | 66 | `parse(serialise(doc)) == doc` for all type combinations |
+| Strict values | `test_strict_values.c` | 224 | Numeric limits, Unicode scalars, UTF-8, records, variants, declarations |
 | Tools | `test_tools.c` | 61 | CLI integration for get, build, and extract |
 
 `tests/test_cli.sh` adds black-box contract checks for all five installed
 programs, including malformed input, argument boundaries, Unicode construction,
-format idempotence, and output failures where `/dev/full` is available.
+format idempotence, closed pipes, and output failures where `/dev/full` is
+available. It currently contains 66 checks.
 
 ### Running C Tests
 
@@ -81,24 +85,16 @@ static void test_my_feature(void) {
 
 ## Python Tests
 
-All Python tests live in `python/tests/test_parse.py`.
+Python tests live in `python/tests/` and currently contain 113 cases.
 
 ```bash
 python3 -m pytest python/tests/ -v          # all tests, verbose
 python3 -m pytest python/tests/ -k "extract" # run only extract tests
 ```
 
-### Test Categories
-
-| Category | Tests | What it covers |
-|----------|-------|----------------|
-| Parsing | 18 | Records, enums, aliases, sequences, variants, booleans, strings, numbers |
-| Validation | 5 | BOM rejection, forward references, duplicates, invalid enums, control chars |
-| Serialisation | 2 | Document-mode and wire-mode round-trip |
-| File parsing | 1 | `parse_file()` reads from disk |
-| Access patterns | 4 | Dict access, attribute access, `.get()`, auto-unwrapping, nested navigation |
-| Extract | 3 | Code fences, plain text, missing documents |
-| Conformance | 1 | Trailing semicolon handling matches C implementation |
+Coverage includes parsing, accessors, serialisation, extraction, identifier
+grammar, exact primitive ranges, finite reals, Unicode `Char` escaping, and
+fixed/variant record schema enforcement.
 
 ### Adding a Python Test
 
@@ -148,6 +144,18 @@ bash scripts/cross-impl-conformance-level3.sh
 
 A new implementation should pass Level 1 first, then work toward Level 2.
 
+### Boundary and rejection parity
+
+```bash
+PYTHON=/path/to/venv/bin/python bash scripts/cross-impl-boundaries.sh
+```
+
+The committed corpus covers every integer boundary, escaped and supplementary
+`Char` values, Unicode strings, fixed records, and enum/Boolean variants. It
+also presents the same malformed numeric, identifier, record, variant, and
+empty-declaration cases to both parsers. The current corpus performs 54 checks,
+including mutual parsing, byte-identical wire output, and idempotence.
+
 ---
 
 ## Full Audit
@@ -159,8 +167,8 @@ make audit
 ```
 
 This executes:
-1. `make test` — 647 C assertions, CLI checks, 34 Python tests, and both
-   cross-implementation conformance levels
+1. `make test` — 889 C assertions, 66 CLI checks, 113 Python tests, both
+   conformance levels, and the 54-check boundary corpus
 2. `make sanitize` — C and CLI tests under AddressSanitizer and UBSan
 3. `make analyze` — warning-clean GCC static-analysis build
 

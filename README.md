@@ -36,7 +36,7 @@ Read it top to bottom. The declarations tell you what the types mean. The data u
 | Self-describing | Shape only | No (needs .proto) | Full types in every document |
 | Discriminated unions | No | Oneof (limited) | Variant records (first-class) |
 | Semantic types | No | No | Enumerations, type aliases |
-| Unknown fields | Ignored or dropped | Preserved as bytes | Parsed, understood, extended |
+| Unknown type declarations | Accepted | Needs updated `.proto` | Parsed, understood, extended |
 
 ## Documentation
 
@@ -76,9 +76,12 @@ sudo make install
 Packaging can be tested without writing to the host installation:
 
 ```bash
-stage=$(mktemp -d)
-make install DESTDIR="$stage"
+make install-check
 ```
+
+That check stages the installation, exercises all five installed commands, and
+compiles and links a small program using only the installed `honest.h` and
+`libhonest.a`.
 
 ### C Library
 
@@ -190,7 +193,7 @@ honest/
   tests/                        # C suites and black-box CLI tests
   python/
     honest/                     # Python library (parse, serialise, extract)
-    tests/                      # Python test suite (34 tests)
+    tests/                      # Python test suite
   scripts/                      # Cross-implementation conformance tests
 ```
 
@@ -213,14 +216,17 @@ The format specification and both reference implementations are complete.
 | Implementor's guide | Complete |
 | NBS standard types | Complete |
 | Examples | Complete |
-| C library (libhonest) | Complete — 647 assertions, ASan/UBSan clean |
-| Python library | Complete — 34 tests |
-| CLI tools | Complete |
-| Cross-impl conformance | Complete — 6/6 byte-identical wire output |
+| C library (libhonest) | Complete — 889 assertions locally green |
+| Python library | Complete — 113 tests locally green |
+| CLI tools | Complete — 66 black-box checks locally green |
+| Cross-impl conformance | Complete — 6 shipped fixtures plus 54 boundary checks locally green |
 
 The C assertions are supplemented by black-box checks of all five executables.
-See the [CLI contract](docs/CONTRACT.md) for exact exit behaviour and
-deliberately unsupported cases.
+ASan/UBSan and GCC static analysis are clean on the local Linux ARM64 host.
+The configured CI matrix covers Linux and macOS on x86-64 and ARM64; those
+hosted results must be checked at the release commit. See the
+[CLI contract](docs/CONTRACT.md) for exact exit behaviour and deliberately
+unsupported cases.
 
 ## Limitations
 

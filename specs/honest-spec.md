@@ -37,7 +37,7 @@ This specification uses the following conventions:
 
 ### 2.1 Character Set
 
-An Honest document is a sequence of Unicode characters encoded in UTF-8. Implementations MUST accept UTF-8 input. Implementations MUST produce UTF-8 output. A byte order mark (BOM, U+FEFF) MUST NOT be present at the start of an Honest document.
+An Honest document is a sequence of Unicode characters encoded in UTF-8. Implementations MUST accept UTF-8 input. Implementations MUST produce UTF-8 output. Invalid UTF-8 anywhere in the byte stream, including within comments or between tokens, is a parse error. A byte order mark (BOM, U+FEFF) MUST NOT be present at the start of an Honest document.
 
 ### 2.2 Whitespace
 
@@ -91,9 +91,12 @@ RealLiteral    = [ "-" ] Digit { Digit } "." Digit { Digit } [ Exponent ] .
 Exponent       = ( "e" | "E" ) [ "+" | "-" ] Digit { Digit } .
 ```
 
-Integer literals represent whole numbers. The range depends on the declared type (see §3.1).
+Integer literals represent whole numbers. The complete token MUST convert
+without overflow, and the result MUST fit the declared type's range (see §3.1).
 
-Real literals represent floating-point numbers. They MUST contain a decimal point with at least one digit on each side.
+Real literals represent floating-point numbers. They MUST contain a decimal
+point with at least one digit on each side. The complete token MUST convert to
+a finite IEEE 754 double; infinities and NaNs are not literals in this grammar.
 
 ### 2.7 String Literals
 
@@ -201,7 +204,10 @@ type
   end;
 ```
 
-**Field presence.** Every field declared in a record MUST be present in the data section with a value of the declared type. There is no null, nil, optional, or default value mechanism. Optionality is expressed via variant records (see §3.5).
+**Field presence.** Every field declared in a record MUST be present exactly
+once in the data section, in declaration order, with a value of the declared
+type. Undeclared fields are errors. There is no null, nil, optional, or default
+value mechanism. Optionality is expressed via variant records (see §3.5).
 
 **Empty records.** A record with no fields and no variant part is permitted but unusual:
 
@@ -243,6 +249,8 @@ type
 3. Each case arm is delimited by parentheses. An empty case arm uses empty parentheses: `()`.
 4. The discriminant type MUST be an enumeration type or `Boolean`.
 5. Every value of the discriminant type SHOULD have a corresponding case arm. Implementations MUST warn if a discriminant value has no case arm.
+6. Every arm label MUST be a value of the discriminant type and MUST occur at
+   most once. Field names within an arm MUST be unique.
 
 **Optionality pattern.** The canonical way to express an optional field is a Boolean variant:
 
